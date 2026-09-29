@@ -10,15 +10,20 @@ import {
 import type { CSSProperties } from 'vue'
 import type { NavCategory, NavItem } from '../types/nav'
 import NavCard from './NavCard.vue'
+import { activeDraggedCard, setDraggedCard, getDraggedCard } from '../services/dragState'
 
 const props = withDefaults(defineProps<{
   category: NavCategory
   openInNewTab: boolean
   isContextMenuActive?: boolean
   isAnyContextMenuActive?: boolean
+  isReorderMode?: boolean
+  draggedCard?: { categoryId: string; item: NavItem; index: number } | null
 }>(), {
   isContextMenuActive: false,
-  isAnyContextMenuActive: false
+  isAnyContextMenuActive: false,
+  isReorderMode: false,
+  draggedCard: null
 })
 
 const emit = defineEmits<{
@@ -28,6 +33,10 @@ const emit = defineEmits<{
   (e: 'dropUrlOnCategory', categoryId: string, url: string): void
   (e: 'editCategory', category: NavCategory): void
   (e: 'deleteCategory', categoryId: string): void
+  (e: 'startReorder', item: NavItem): void
+  (e: 'dragStartCard', payload: { categoryId: string; item: NavItem; index: number }): void
+  (e: 'dragEndCard'): void
+  (e: 'dropCard', payload: { targetCategoryId: string; targetIndex: number }): void
 }>()
 
 const isDragOver = ref(false)
@@ -62,8 +71,15 @@ const updateColumnsCount = () => {
 
 // 物理高度连续插值
 const updateReelHeight = () => {
-  if (isCollapsed.value) {
+  if (isCollapsed.value && !props.isReorderMode) {
     currentHeight.value = '0px'
+    return
+  }
+  if (props.isReorderMode) {
+    // 调整模式下：全局展开，露出全部卡片以便跨分类与全局拖拽
+    if (reelGridRef.value) {
+      currentHeight.value = `${reelGridRef.value.scrollHeight + 6}px`
+    }
     return
   }
   if (!isHovered.value) {
@@ -76,8 +92,21 @@ const updateReelHeight = () => {
   }
 }
 
+watch(() => props.isReorderMode, (reordering) => {
+  if (reordering) {
+    isHovered.value = true
+    isRevealed.value = true
+    nextTick(updateReelHeight)
+  } else {
+    isHovered.value = false
+    isRevealed.value = false
+    nextTick(updateReelHeight)
+  }
+})
+
 // 展开逻辑 (外框先动，波浪后现)
 const expandSection = () => {
+  if (props.isReorderMode) return
   if (collapseTimer) {
     clearTimeout(collapseTimer)
     collapseTimer = null
@@ -93,6 +122,7 @@ const expandSection = () => {
 
 // 收起逻辑 (波浪先隐，外框后合)
 const collapseSection = () => {
+  if (props.isReorderMode) return
   if (revealTimer) {
     clearTimeout(revealTimer)
     revealTimer = null
@@ -172,6 +202,15 @@ watch(() => props.isAnyContextMenuActive, (isAnyActive) => {
 
 // 纯向下展开的波浪级联样式算法
 const getCardWaveStyle = (index: number): CSSProperties => {
+  // 调整模式下：所有卡片直接稳定呈现，解除动画延迟，保障拖动跟手
+  if (props.isReorderMode) {
+    return {
+      opacity: 1,
+      transform: 'translateY(0) scale(1)',
+      transition: 'none'
+    }
+  }
+
   // 属于第一排的卡片：始终可见，零延迟，心流绝对稳定
   if (index < columnsCount.value) {
     return {}
@@ -199,6 +238,87 @@ const getCardWaveStyle = (index: number): CSSProperties => {
     transition: 'opacity 180ms cubic-bezier(0.16, 1, 0.3, 1), transform 180ms cubic-bezier(0.16, 1, 0.3, 1)',
     transitionDelay: `${waveDelay}ms`
   }
+}
+
+// 图标位置调整拖拽事件处理
+const hoverTargetIndex = ref<number | null>(null)
+const hoverInsertPos = ref<'before' | 'after'>('before')
+
+const handleCardDragStart = (e: DragEvent, item: NavItem, index: number) => {
+  if (!props.isReorderMode) return
+  setDraggedCard({ categoryId: props.category.id, item, index })
+  emit('dragStartCard', { categoryId: props.category.id, item, index })
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', item.id)
+  }
+}
+
+const handleCardDragEnd = () => {
+  hoverTargetIndex.value = null
+  setDraggedCard(null)
+  emit('dragEndCard')
+}
+
+const handleCardDragOver = (e: DragEvent, index: number) => {
+  if (!getDraggedCard()) return
+  e.preventDefault()
+  e.stopPropagation()
+  if (e.dataTransfer) {
+    e.dataTransfer.dropEffect = 'move'
+  }
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  const mouseX = e.clientX - rect.left
+  hoverInsertPos.value = mouseX < rect.width / 2 ? 'before' : 'after'
+  hoverTargetIndex.value = index
+}
+
+const handleCardDragLeave = (_e: DragEvent, index: number) => {
+  if (hoverTargetIndex.value === index) {
+    hoverTargetIndex.value = null
+  }
+}
+
+const handleCardDrop = (e: DragEvent, index: number) => {
+  if (!getDraggedCard()) return
+  e.preventDefault()
+  e.stopPropagation()
+
+  let finalTargetIndex = index
+  if (hoverInsertPos.value === 'after') {
+    finalTargetIndex = index + 1
+  }
+
+  emit('dropCard', {
+    targetCategoryId: props.category.id,
+    targetIndex: finalTargetIndex
+  })
+  hoverTargetIndex.value = null
+}
+
+const handleSectionDragOver = (e: DragEvent) => {
+  if (getDraggedCard()) {
+    e.preventDefault()
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'move'
+    }
+  } else {
+    handleDragOver(e)
+  }
+}
+
+const handleSectionDrop = (e: DragEvent) => {
+  if (getDraggedCard()) {
+    e.preventDefault()
+    e.stopPropagation()
+    emit('dropCard', {
+      targetCategoryId: props.category.id,
+      targetIndex: props.category.items.length
+    })
+    hoverTargetIndex.value = null
+    return
+  }
+  handleDrop(e)
 }
 
 watch(() => props.category.items.length, () => {
@@ -260,11 +380,14 @@ const getCategoryIcon = (iconName?: string) => {
   <section 
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
-    class="category-section w-full mb-4 rounded-2xl p-2.5 transition-colors duration-200 hover:bg-slate-50/50"
-    :class="isDragOver ? 'bg-blue-50/70 ring-2 ring-blue-400 ring-dashed shadow-md' : ''"
-    @dragover="handleDragOver"
+    class="category-section w-full mb-4 rounded-2xl p-2.5 transition-colors duration-200"
+    :class="[
+      isDragOver ? 'bg-blue-50/70 ring-2 ring-blue-400 ring-dashed shadow-md' : 'hover:bg-slate-50/50',
+      isReorderMode ? 'bg-slate-50/60 ring-1 ring-slate-200/60' : ''
+    ]"
+    @dragover="handleSectionDragOver"
     @dragleave="handleDragLeave"
-    @drop="handleDrop"
+    @drop="handleSectionDrop"
   >
     <!-- 分类头部 (纯净极简无边框) -->
     <div class="flex items-center mb-2.5 px-1 select-none">
@@ -299,14 +422,32 @@ const getCategoryIcon = (iconName?: string) => {
         <div
           v-for="(item, idx) in category.items"
           :key="item.id"
-          class="wave-card-wrapper"
+          class="wave-card-wrapper relative"
+          :class="{
+            'opacity-30 scale-95': activeDraggedCard && activeDraggedCard.item.id === item.id
+          }"
           :style="getCardWaveStyle(idx)"
+          :draggable="isReorderMode"
+          @dragstart="handleCardDragStart($event, item, idx)"
+          @dragend="handleCardDragEnd"
+          @dragover="handleCardDragOver($event, idx)"
+          @dragleave="handleCardDragLeave($event, idx)"
+          @drop="handleCardDrop($event, idx)"
         >
+          <!-- 放置前的蓝色发光指示线 (在卡片左侧或右侧) -->
+          <div
+            v-if="isReorderMode && activeDraggedCard && hoverTargetIndex === idx"
+            class="absolute top-1 bottom-1 w-1 bg-blue-500 rounded-full z-30 pointer-events-none shadow-sm shadow-blue-500/60 animate-pulse"
+            :class="hoverInsertPos === 'before' ? '-left-1.5' : '-right-1.5'"
+          ></div>
+
           <NavCard
             :item="item"
             :open-in-new-tab="openInNewTab"
+            :is-reordering="isReorderMode"
             @click-item="$emit('clickItem', $event)"
             @open-context-menu="$emit('openContextMenu', { ...$event, categoryId: category.id })"
+            @start-reorder="$emit('startReorder', $event)"
           />
         </div>
 

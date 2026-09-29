@@ -34,56 +34,56 @@
           "title": "油管",
           "url": "https://www.youtube.com",
           "icon": "https://www.youtube.com/favicon.ico",
-          "pinned": true
+          "pinned": false
         },
         {
           "id": "item-flare-4",
           "title": "代码托管",
           "url": "https://www.github.com",
           "icon": "https://github.githubassets.com/favicons/favicon.svg",
-          "pinned": true
+          "pinned": false
         },
         {
           "id": "item-flare-5",
           "title": "域名托管",
           "url": "https://dash.cloudflare.com/login",
           "icon": "https://dash.cloudflare.com/favicon.ico",
-          "pinned": true
+          "pinned": false
         },
         {
           "id": "item-flare-6",
           "title": "编程练习",
           "url": "https://leetcode.cn/studyplan/top-interview-150/",
           "icon": "https://leetcode.cn/favicon.ico",
-          "pinned": true
+          "pinned": false
         },
         {
           "id": "item-flare-7",
           "title": "打洞",
           "url": "http://104.224.154.67:11211/",
           "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/wireguard.png",
-          "pinned": true
+          "pinned": false
         },
         {
           "id": "item-flare-8",
           "title": "微信",
           "url": "https://wechat.zeges.top",
           "icon": "https://res.wx.qq.com/a/wx_fed/assets/res/NTI4MWU5.ico",
-          "pinned": true
+          "pinned": false
         },
         {
           "id": "item-flare-9",
           "title": "模型桥接",
           "url": "http://192.168.3.25:8317/management.html#",
           "icon": "",
-          "pinned": true
+          "pinned": false
         },
         {
           "id": "item-flare-10",
           "title": "代理池",
           "url": "http://192.168.3.25:9090/ui/#/overview",
           "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/clash.png",
-          "pinned": true
+          "pinned": false
         }
       ]
     },

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { FolderPlus, Search, HelpCircle, CheckCircle2, Settings } from 'lucide-vue-next'
+import { FolderPlus, Search, HelpCircle, CheckCircle2, Settings, Check } from 'lucide-vue-next'
 import type { NavConfig, NavCategory, NavItem, NavSettings } from './types/nav'
 import { 
   loadInitialConfig, 
@@ -21,6 +21,7 @@ import EditCategoryModal from './components/EditCategoryModal.vue'
 import BackgroundLayer from './components/BackgroundLayer.vue'
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal.vue'
 import ContextMenu from './components/ContextMenu.vue'
+import { getDraggedCard, setDraggedCard } from './services/dragState'
 
 const config = ref<NavConfig>({ ...DEFAULT_CONFIG })
 const isLoaded = ref(false)
@@ -131,7 +132,9 @@ const handleGlobalKeydown = (e: KeyboardEvent) => {
     e.preventDefault()
     isZenMode.value = !isZenMode.value
   } else if (e.key === 'Escape') {
-    if (isZenMode.value) {
+    if (isReorderMode.value) {
+      isReorderMode.value = false
+    } else if (isZenMode.value) {
       isZenMode.value = false
     }
   } else if (e.key === 'n' || e.key === 'N') {
@@ -212,7 +215,12 @@ const handleSaveItem = ({ item, categoryId }: { item: NavItem; categoryId: strin
   }
 
   if (targetCat) {
-    targetCat.items.push(item)
+    if (item.pinned) {
+      // 置顶站点插入到置顶项的最前端
+      targetCat.items.unshift(item)
+    } else {
+      targetCat.items.push(item)
+    }
     persistChanges()
     showToast('已保存')
   }
@@ -244,10 +252,68 @@ const handleDeleteItem = (item: NavItem) => {
   }
 }
 
-const handleTogglePin = (item: NavItem) => {
-  item.pinned = !item.pinned
+// 图标位置调整模式 (类似手机 App 长按抖动排序)
+const isReorderMode = ref(false)
+const draggedCardInfo = ref<{
+  categoryId: string
+  item: NavItem
+  index: number
+} | null>(null)
+
+const handleStartReorder = (item?: NavItem) => {
+  isReorderMode.value = true
+  if (contextMenuState.value.show) {
+    handleCloseContextMenu()
+  }
+  showToast(item ? `进入编辑模式：长按拖动「${item.title}」调整位置` : '进入编辑模式：可直接拖动图标调整位置或跨分类移动')
+}
+
+const handleDragStartCard = (payload: { categoryId: string; item: NavItem; index: number }) => {
+  draggedCardInfo.value = payload
+}
+
+const handleDragEndCard = () => {
+  draggedCardInfo.value = null
+}
+
+const handleDropCard = ({ targetCategoryId, targetIndex }: { targetCategoryId: string; targetIndex: number }) => {
+  const currentDrag = getDraggedCard() || draggedCardInfo.value
+  if (!currentDrag) return
+
+  const { categoryId: sourceCatId, index: sourceIndex } = currentDrag
+  const sourceCat = config.value.categories.find(c => c.id === sourceCatId)
+  const targetCat = config.value.categories.find(c => c.id === targetCategoryId)
+
+  if (!sourceCat || !targetCat) {
+    setDraggedCard(null)
+    draggedCardInfo.value = null
+    return
+  }
+
+  // 1. 同分类内调整位置
+  if (sourceCatId === targetCategoryId) {
+    if (sourceIndex === targetIndex || sourceIndex === targetIndex - 1) {
+      setDraggedCard(null)
+      draggedCardInfo.value = null
+      return
+    }
+    const [movedItem] = sourceCat.items.splice(sourceIndex, 1)
+    let newIndex = targetIndex
+    if (sourceIndex < targetIndex) {
+      newIndex = targetIndex - 1
+    }
+    sourceCat.items.splice(newIndex, 0, movedItem)
+  } else {
+    // 2. 跨分类移动
+    const [movedItem] = sourceCat.items.splice(sourceIndex, 1)
+    const newIndex = Math.min(targetIndex, targetCat.items.length)
+    targetCat.items.splice(newIndex, 0, movedItem)
+    showToast(`已移动到「${targetCat.name}」`)
+  }
+
   persistChanges()
-  showToast(item.pinned ? '已置顶' : '取消置顶')
+  setDraggedCard(null)
+  draggedCardInfo.value = null
 }
 
 const handleClickItem = (item: NavItem) => {
@@ -426,12 +492,18 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
             :open-in-new-tab="config.settings.openInNewTab"
             :is-context-menu-active="activeContextMenuCategoryId === cat.id"
             :is-any-context-menu-active="contextMenuState.show"
+            :is-reorder-mode="isReorderMode"
+            :dragged-card="draggedCardInfo"
             @click-item="handleClickItem"
             @open-context-menu="handleOpenContextMenu"
             @add-item-to-category="openAddModal"
             @drop-url-on-category="handleDropUrlOnCategory"
             @edit-category="handleEditCategory"
             @delete-category="handleDeleteCategory"
+            @start-reorder="handleStartReorder"
+            @drag-start-card="handleDragStartCard"
+            @drag-end-card="handleDragEndCard"
+            @drop-card="handleDropCard"
           />
         </div>
 
@@ -544,6 +616,33 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
       @close="showShortcutsModal = false"
     />
 
+    <!-- 图标位置调整模式（浮动完成控制胶囊） -->
+    <transition
+      enter-active-class="transform transition ease-out duration-250"
+      enter-from-class="-translate-y-8 opacity-0 scale-95"
+      enter-to-class="translate-y-0 opacity-100 scale-100"
+      leave-active-class="transform transition ease-in duration-200"
+      leave-from-class="translate-y-0 opacity-100 scale-100"
+      leave-to-class="-translate-y-8 opacity-0 scale-95"
+    >
+      <div 
+        v-if="isReorderMode"
+        class="fixed top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2 rounded-full bg-slate-900/90 text-white text-xs backdrop-blur-xl shadow-2xl border border-white/10 select-none"
+      >
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="font-medium text-slate-200">图标调整中 · 拖动可跨分类排序</span>
+        </div>
+        <button
+          @click="isReorderMode = false"
+          class="flex items-center gap-1 px-3 py-1 rounded-full bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-medium text-xs transition-all shadow-xs"
+        >
+          <Check class="w-3.5 h-3.5" />
+          <span>完成</span>
+        </button>
+      </div>
+    </transition>
+
     <!-- 右键上下文菜单 -->
     <ContextMenu
       :show="contextMenuState.show"
@@ -553,7 +652,7 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
       @close="handleCloseContextMenu"
       @open-item="handleOpenInNewTab"
       @copy-url="handleCopyUrl"
-      @toggle-pin="handleTogglePin"
+      @start-reorder="handleStartReorder"
       @edit-item="handleEditItem"
       @delete-item="handleDeleteItem"
     />

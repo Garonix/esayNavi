@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { 
   ExternalLink, 
-  Pin, 
+  Move, 
   Edit3, 
   Copy, 
   Trash2 
@@ -19,7 +19,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'openItem', item: NavItem, inNewTab: boolean): void
-  (e: 'togglePin', item: NavItem): void
+  (e: 'startReorder', item: NavItem): void
   (e: 'editItem', item: NavItem): void
   (e: 'copyUrl', item: NavItem): void
   (e: 'deleteItem', item: NavItem): void
@@ -112,11 +112,11 @@ onUnmounted(() => {
         </button>
 
         <button
-          @click="emit('togglePin', item); emit('close')"
+          @click="emit('startReorder', item); emit('close')"
           class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 transition-colors text-left"
         >
-          <Pin class="w-3.5 h-3.5" :class="item.pinned ? 'text-blue-600 fill-blue-500/20' : 'text-slate-400'" />
-          <span>{{ item.pinned ? '取消置顶' : '置顶' }}</span>
+          <Move class="w-3.5 h-3.5 text-slate-400" />
+          <span>调整位置</span>
         </button>
 
         <button
