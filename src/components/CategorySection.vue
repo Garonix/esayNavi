@@ -320,53 +320,40 @@ const handleCardDragStart = (e: DragEvent, item: NavItem, index: number) => {
 
   const targetEl = e.currentTarget as HTMLElement
   const cardInner = (targetEl.querySelector('.glass-card') as HTMLElement) || targetEl
-  const rect = cardInner.getBoundingClientRect()
+  const cardRect = cardInner.getBoundingClientRect()
 
-  // 1. 精准测量鼠标指针相对于卡片的物理点击坐标
-  const rawOffsetX = e.clientX ? e.clientX - rect.left : rect.width / 2
-  const rawOffsetY = e.clientY ? e.clientY - rect.top : rect.height / 2
-  const offsetX = Math.max(8, Math.min(rawOffsetX, rect.width - 8))
-  const offsetY = Math.max(8, Math.min(rawOffsetY, rect.height - 8))
+  // 1. 严格计算图标几何正中心（相对于卡片左上角）
+  // 用户第一心流锚点是图标，拖拽起拖时鼠标指针分毫不差、绝对钉在图标正中心！
+  const iconEl = cardInner.querySelector('img') || cardInner.querySelector('.w-9')
+  let iconCenterX = cardRect.width / 2
+  let iconCenterY = cardRect.height / 2
 
-  // 2. 制作专属、绝对水平（消除 app-jiggle 旋转与 transform 坐标系错位 BUG）、高清纯正的拖拽虚影 (Drag Image)
-  const clone = cardInner.cloneNode(true) as HTMLElement
-  clone.style.position = 'fixed'
-  clone.style.top = '-9999px'
-  clone.style.left = '-9999px'
-  clone.style.width = `${rect.width}px`
-  clone.style.height = `${rect.height}px`
-  clone.style.margin = '0'
-  clone.style.transform = 'none'
-  clone.style.animation = 'none'
-  clone.style.transition = 'none'
-  clone.style.opacity = '0.96'
-  clone.style.borderRadius = '16px'
-  clone.style.boxShadow = '0 16px 36px -4px rgba(0, 0, 0, 0.16), 0 6px 16px -2px rgba(59, 130, 246, 0.18)'
-  clone.style.pointerEvents = 'none'
-  clone.style.zIndex = '999999'
+  if (iconEl) {
+    const iconRect = iconEl.getBoundingClientRect()
+    iconCenterX = (iconRect.left + iconRect.width / 2) - cardRect.left
+    iconCenterY = (iconRect.top + iconRect.height / 2) - cardRect.top
+  } else {
+    iconCenterY = 36
+  }
 
-  // 清除内部所有可能存在的晃动类名与 transform
-  clone.classList.remove('app-jiggle')
-
-  document.body.appendChild(clone)
+  // 2. 临时去除卡片本身的晃动与倾斜，确保生成的拖拽图像绝对水平正直
+  cardInner.style.animation = 'none'
+  cardInner.style.transform = 'none'
 
   if (e.dataTransfer) {
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', item.id)
-    // 关键核心：将 Drag Image 锚点与鼠标指针在卡片内的点击点绝对重合！
-    e.dataTransfer.setDragImage(clone, offsetX, offsetY)
+    // 关键核心：直接将已经在屏幕上完整渲染的真实卡片设为 Drag Image，并锚定于图标中心
+    // 彻底根除因离屏克隆节点被丢弃导致回退至 (0, 0) 所引起的向右偏移一个图标宽度 BUG
+    try {
+      e.dataTransfer.setDragImage(cardInner, iconCenterX, iconCenterY)
+    } catch {
+      // 兼容兜底
+    }
   }
 
-  // 下一帧清理离屏克隆节点
-  setTimeout(() => {
-    if (clone && clone.parentNode) {
-      clone.parentNode.removeChild(clone)
-    }
-  }, 0)
-
-  // 关键核心 2：延迟一帧（setTimeout 0）更新全局响应式状态！
+  // 3. 关键核心：延迟一帧（setTimeout 0）更新全局响应式状态！
   // 必须等待浏览器完全捕获并锁定了实体卡片的 Drag Image 之后，原位卡片才转化为半透明占位凹槽！
-  // 彻底根除 DOM 突变引发的 Chromium 拖拽图像消失或坐标错位崩溃
   setTimeout(() => {
     setDraggedCard({ categoryId: props.category.id, item, index })
     setDragHoverTarget({ categoryId: props.category.id, index })
