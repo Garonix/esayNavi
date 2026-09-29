@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, TransitionGroup } from 'vue'
 import { 
   Sparkles, 
   CodeXml, 
@@ -10,7 +10,21 @@ import {
 import type { CSSProperties } from 'vue'
 import type { NavCategory, NavItem } from '../types/nav'
 import NavCard from './NavCard.vue'
-import { activeDraggedCard, setDraggedCard, getDraggedCard } from '../services/dragState'
+import { 
+  activeDraggedCard, 
+  dragHoverTarget,
+  setDraggedCard, 
+  getDraggedCard,
+  setDragHoverTarget,
+  getDragHoverTarget,
+  clearDragState
+} from '../services/dragState'
+
+export interface DisplayCard {
+  id: string
+  item: NavItem
+  isGhost: boolean
+}
 
 const props = withDefaults(defineProps<{
   category: NavCategory
@@ -48,7 +62,7 @@ const isMouseInside = ref(false)
 let revealTimer: number | null = null
 let collapseTimer: number | null = null
 
-const reelGridRef = ref<HTMLElement | null>(null)
+const reelGridRef = ref<any>(null)
 const SINGLE_ROW_HEIGHT = 98
 const currentHeight = ref<string>(`${SINGLE_ROW_HEIGHT}px`)
 
@@ -75,18 +89,19 @@ const updateReelHeight = () => {
     currentHeight.value = '0px'
     return
   }
+  const el = reelGridRef.value?.$el || reelGridRef.value
   if (props.isReorderMode) {
     // 调整模式下：全局展开，露出全部卡片以便跨分类与全局拖拽
-    if (reelGridRef.value) {
-      currentHeight.value = `${reelGridRef.value.scrollHeight + 6}px`
+    if (el) {
+      currentHeight.value = `${el.scrollHeight + 6}px`
     }
     return
   }
   if (!isHovered.value) {
     currentHeight.value = `${SINGLE_ROW_HEIGHT}px`
   } else {
-    if (reelGridRef.value) {
-      const fullH = reelGridRef.value.scrollHeight
+    if (el) {
+      const fullH = el.scrollHeight
       currentHeight.value = `${fullH + 4}px`
     }
   }
@@ -149,7 +164,7 @@ const handleMouseEnter = () => {
 // 鼠标移出
 const handleMouseLeave = () => {
   isMouseInside.value = false
-  // 核心修复：若当前分类的右键菜单正在显示，绝对锁定展开，禁止收起！
+  // 若当前分类的右键菜单正在显示，绝对锁定展开，禁止收起！
   if (props.isContextMenuActive) {
     return
   }
@@ -159,7 +174,6 @@ const handleMouseLeave = () => {
 // 监听当前分类的右键菜单激活状态
 watch(() => props.isContextMenuActive, (isActive) => {
   if (isActive) {
-    // 菜单呼出时：立即暂停并清除一切收起定时器，强制锁定完全展开状态
     if (collapseTimer) {
       clearTimeout(collapseTimer)
       collapseTimer = null
@@ -172,16 +186,12 @@ watch(() => props.isContextMenuActive, (isActive) => {
     isRevealed.value = true
     nextTick(updateReelHeight)
   } else {
-    // 菜单关闭后：若光标已离开分类区域，恢复平滑优雅收起
     if (!isMouseInside.value) {
       collapseSection()
     }
   }
 })
 
-// 当全局右键菜单开启或关闭时：
-// 1. 若全局右键菜单打开且非本分类，立即强行冻结收拢并清空定时器，消灭一切残留位移动作；
-// 2. 若全局右键菜单关闭且鼠标依然停留，平滑唤醒展开。
 watch(() => props.isAnyContextMenuActive, (isAnyActive) => {
   if (isAnyActive && !props.isContextMenuActive) {
     if (collapseTimer) {
@@ -202,13 +212,9 @@ watch(() => props.isAnyContextMenuActive, (isAnyActive) => {
 
 // 纯向下展开的波浪级联样式算法
 const getCardWaveStyle = (index: number): CSSProperties => {
-  // 调整模式下：所有卡片直接稳定呈现，解除动画延迟，保障拖动跟手
+  // 调整模式下：返回空样式，绝对不内联任何 transform/transition，完全交给 Vue TransitionGroup 的原生 FLIP
   if (props.isReorderMode) {
-    return {
-      opacity: 1,
-      transform: 'translateY(0) scale(1)',
-      transition: 'none'
-    }
+    return {}
   }
 
   // 属于第一排的卡片：始终可见，零延迟，心流绝对稳定
@@ -240,13 +246,79 @@ const getCardWaveStyle = (index: number): CSSProperties => {
   }
 }
 
-// 图标位置调整拖拽事件处理
-const hoverTargetIndex = ref<number | null>(null)
-const hoverInsertPos = ref<'before' | 'after'>('before')
+// 动态响应式计算展示列表 (实时推移与凹槽插入，触发 TransitionGroup FLIP)
+const displayCards = computed<DisplayCard[]>(() => {
+  const originalItems = props.category.items
+  const drag = activeDraggedCard.value
+  const hover = dragHoverTarget.value
 
+  if (!drag || !props.isReorderMode) {
+    return originalItems.map(item => ({
+      id: item.id,
+      item,
+      isGhost: false
+    }))
+  }
+
+  const isSourceCategory = drag.categoryId === props.category.id
+  const isTargetCategory = hover && hover.categoryId === props.category.id
+
+  // 1. 本分类是拖拽源分类
+  if (isSourceCategory) {
+    const remainingItems = originalItems.filter(i => i.id !== drag.item.id)
+    if (isTargetCategory) {
+      // 仍然在本分类悬停：将 Ghost 卡片插入到 hover.index 处
+      const targetIndex = Math.max(0, Math.min(hover.index, remainingItems.length))
+      const result: DisplayCard[] = remainingItems.map(item => ({
+        id: item.id,
+        item,
+        isGhost: false
+      }))
+      result.splice(targetIndex, 0, {
+        id: drag.item.id,
+        item: drag.item,
+        isGhost: true
+      })
+      return result
+    } else {
+      // 鼠标已移出源分类：源分类顺滑收缩闭合
+      return remainingItems.map(item => ({
+        id: item.id,
+        item,
+        isGhost: false
+      }))
+    }
+  }
+
+  // 2. 本分类是跨分类拖入的目标分类
+  if (isTargetCategory) {
+    const targetIndex = Math.max(0, Math.min(hover.index, originalItems.length))
+    const result: DisplayCard[] = originalItems.map(item => ({
+      id: item.id,
+      item,
+      isGhost: false
+    }))
+    result.splice(targetIndex, 0, {
+      id: drag.item.id,
+      item: drag.item,
+      isGhost: true
+    })
+    return result
+  }
+
+  // 3. 其他非活动分类：保持原样
+  return originalItems.map(item => ({
+    id: item.id,
+    item,
+    isGhost: false
+  }))
+})
+
+// 图标位置调整拖拽事件处理
 const handleCardDragStart = (e: DragEvent, item: NavItem, index: number) => {
   if (!props.isReorderMode) return
   setDraggedCard({ categoryId: props.category.id, item, index })
+  setDragHoverTarget({ categoryId: props.category.id, index })
   emit('dragStartCard', { categoryId: props.category.id, item, index })
   if (e.dataTransfer) {
     e.dataTransfer.effectAllowed = 'move'
@@ -255,52 +327,74 @@ const handleCardDragStart = (e: DragEvent, item: NavItem, index: number) => {
 }
 
 const handleCardDragEnd = () => {
-  hoverTargetIndex.value = null
-  setDraggedCard(null)
+  clearDragState()
   emit('dragEndCard')
 }
 
-const handleCardDragOver = (e: DragEvent, index: number) => {
-  if (!getDraggedCard()) return
+const handleCardDragOver = (e: DragEvent, card: DisplayCard) => {
+  const currentDrag = getDraggedCard()
+  if (!currentDrag || !props.isReorderMode) return
   e.preventDefault()
   e.stopPropagation()
   if (e.dataTransfer) {
     e.dataTransfer.dropEffect = 'move'
   }
+
+  // 若悬停在占位凹槽本身，保持当前坑位，避免左右抖动
+  if (card.isGhost) return
+
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
   const mouseX = e.clientX - rect.left
-  hoverInsertPos.value = mouseX < rect.width / 2 ? 'before' : 'after'
-  hoverTargetIndex.value = index
-}
+  const isRightHalf = mouseX > rect.width * 0.5
 
-const handleCardDragLeave = (_e: DragEvent, index: number) => {
-  if (hoverTargetIndex.value === index) {
-    hoverTargetIndex.value = null
+  const nonGhostCards = displayCards.value.filter(c => !c.isGhost)
+  const targetItemIndex = nonGhostCards.findIndex(c => c.id === card.id)
+  if (targetItemIndex === -1) return
+
+  const targetIndex = isRightHalf ? targetItemIndex + 1 : targetItemIndex
+
+  const currentHover = getDragHoverTarget()
+  if (!currentHover || currentHover.categoryId !== props.category.id || currentHover.index !== targetIndex) {
+    setDragHoverTarget({
+      categoryId: props.category.id,
+      index: targetIndex
+    })
   }
 }
 
-const handleCardDrop = (e: DragEvent, index: number) => {
-  if (!getDraggedCard()) return
+const handleCardDrop = (e: DragEvent) => {
+  const currentDrag = getDraggedCard()
+  if (!currentDrag || !props.isReorderMode) return
   e.preventDefault()
   e.stopPropagation()
 
-  let finalTargetIndex = index
-  if (hoverInsertPos.value === 'after') {
-    finalTargetIndex = index + 1
+  const currentHover = getDragHoverTarget()
+  let finalTargetIndex = displayCards.value.length
+  if (currentHover && currentHover.categoryId === props.category.id) {
+    finalTargetIndex = currentHover.index
   }
 
   emit('dropCard', {
     targetCategoryId: props.category.id,
     targetIndex: finalTargetIndex
   })
-  hoverTargetIndex.value = null
+  clearDragState()
 }
 
 const handleSectionDragOver = (e: DragEvent) => {
-  if (getDraggedCard()) {
+  const currentDrag = getDraggedCard()
+  if (currentDrag && props.isReorderMode) {
     e.preventDefault()
     if (e.dataTransfer) {
       e.dataTransfer.dropEffect = 'move'
+    }
+    const currentHover = getDragHoverTarget()
+    if (!currentHover || currentHover.categoryId !== props.category.id) {
+      const nonGhostCards = displayCards.value.filter(c => !c.isGhost)
+      setDragHoverTarget({
+        categoryId: props.category.id,
+        index: nonGhostCards.length
+      })
     }
   } else {
     handleDragOver(e)
@@ -308,20 +402,26 @@ const handleSectionDragOver = (e: DragEvent) => {
 }
 
 const handleSectionDrop = (e: DragEvent) => {
-  if (getDraggedCard()) {
+  const currentDrag = getDraggedCard()
+  if (currentDrag && props.isReorderMode) {
     e.preventDefault()
     e.stopPropagation()
+    const currentHover = getDragHoverTarget()
+    let finalTargetIndex = props.category.items.length
+    if (currentHover && currentHover.categoryId === props.category.id) {
+      finalTargetIndex = currentHover.index
+    }
     emit('dropCard', {
       targetCategoryId: props.category.id,
-      targetIndex: props.category.items.length
+      targetIndex: finalTargetIndex
     })
-    hoverTargetIndex.value = null
+    clearDragState()
     return
   }
   handleDrop(e)
 }
 
-watch(() => props.category.items.length, () => {
+watch(() => displayCards.value.length, () => {
   nextTick(updateReelHeight)
 })
 
@@ -414,35 +514,54 @@ const getCategoryIcon = (iconName?: string) => {
       class="scroll-reel-container overflow-hidden"
       :style="{ height: currentHeight }"
     >
-      <!-- 舒适透气的 4~6 列自适应网格 -->
-      <div
+      <!-- 舒适透气的 3~6 列自适应网格 + FLIP 平滑挤占 TransitionGroup -->
+      <TransitionGroup
         ref="reelGridRef"
+        name="card-reorder"
+        tag="div"
         class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 relative p-0.5"
       >
         <div
-          v-for="(item, idx) in category.items"
-          :key="item.id"
+          v-for="(card, idx) in displayCards"
+          :key="card.id"
           class="wave-card-wrapper relative"
-          :class="{
-            'opacity-30 scale-95': activeDraggedCard && activeDraggedCard.item.id === item.id
-          }"
           :style="getCardWaveStyle(idx)"
-          :draggable="isReorderMode"
-          @dragstart="handleCardDragStart($event, item, idx)"
+          :draggable="isReorderMode && !card.isGhost"
+          @dragstart="handleCardDragStart($event, card.item, idx)"
           @dragend="handleCardDragEnd"
-          @dragover="handleCardDragOver($event, idx)"
-          @dragleave="handleCardDragLeave($event, idx)"
-          @drop="handleCardDrop($event, idx)"
+          @dragover="handleCardDragOver($event, card)"
+          @drop="handleCardDrop($event)"
         >
-          <!-- 放置前的蓝色发光指示线 (在卡片左侧或右侧) -->
+          <!-- 高质感半透明虚线凹槽占位符 (Ghost Slot) -->
           <div
-            v-if="isReorderMode && activeDraggedCard && hoverTargetIndex === idx"
-            class="absolute top-1 bottom-1 w-1 bg-blue-500 rounded-full z-30 pointer-events-none shadow-sm shadow-blue-500/60 animate-pulse"
-            :class="hoverInsertPos === 'before' ? '-left-1.5' : '-right-1.5'"
-          ></div>
+            v-if="card.isGhost"
+            class="ghost-card-slot w-full h-[94px] p-2.5 rounded-2xl border-2 border-dashed border-blue-400/80 bg-blue-50/40 backdrop-blur-xs flex flex-col items-center justify-center select-none shadow-[inset_0_2px_6px_rgba(59,130,246,0.08)] pointer-events-none transition-all duration-200"
+          >
+            <!-- 柔和微缩卡片虚影 -->
+            <div class="w-10 h-10 flex items-center justify-center opacity-30 grayscale scale-90">
+              <img
+                v-if="card.item.icon"
+                :src="card.item.icon"
+                class="w-8 h-8 object-contain"
+              />
+              <div
+                v-else
+                class="w-8 h-8 rounded-xl bg-blue-300 text-white font-bold text-xs flex items-center justify-center"
+              >
+                {{ card.item.title.slice(0, 1) }}
+              </div>
+            </div>
+            <div class="w-full mt-1.5 px-1 text-center">
+              <span class="text-[10px] font-semibold text-blue-500/80 truncate block tracking-tight">
+                放置在此
+              </span>
+            </div>
+          </div>
 
+          <!-- 真实卡片 -->
           <NavCard
-            :item="item"
+            v-else
+            :item="card.item"
             :open-in-new-tab="openInNewTab"
             :is-reordering="isReorderMode"
             @click-item="$emit('clickItem', $event)"
@@ -451,10 +570,11 @@ const getCategoryIcon = (iconName?: string) => {
           />
         </div>
 
-        <!-- 极简加号卡片 (图标无边框设计，同样接入向右波浪逻辑) -->
+        <!-- 极简加号卡片 (图标无边框设计，同样接入波浪与过渡逻辑) -->
         <div
+          key="static-action-add"
           class="wave-card-wrapper"
-          :style="getCardWaveStyle(category.items.length)"
+          :style="getCardWaveStyle(displayCards.length)"
         >
           <button
             @click="$emit('addItemToCategory', category.id)"
@@ -466,7 +586,7 @@ const getCategoryIcon = (iconName?: string) => {
             <span class="text-[10px] font-medium text-slate-400 transition-colors">添加</span>
           </button>
         </div>
-      </div>
+      </TransitionGroup>
     </div>
   </section>
 </template>
@@ -480,5 +600,27 @@ const getCategoryIcon = (iconName?: string) => {
 
 .wave-card-wrapper {
   will-change: transform, opacity;
+}
+
+/* FLIP 挤占推移动画：0.24s 极速贝塞尔曲线过渡 */
+.card-reorder-move {
+  transition: transform 0.24s cubic-bezier(0.2, 0, 0, 1);
+  will-change: transform;
+}
+
+.card-reorder-enter-active {
+  transition: opacity 0.2s cubic-bezier(0.2, 0, 0, 1), transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.card-reorder-leave-active {
+  transition: opacity 0.15s cubic-bezier(0.2, 0, 0, 1), transform 0.15s cubic-bezier(0.2, 0, 0, 1);
+  position: absolute;
+  pointer-events: none;
+}
+
+.card-reorder-enter-from,
+.card-reorder-leave-to {
+  opacity: 0;
+  transform: scale(0.92);
 }
 </style>

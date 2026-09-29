@@ -21,7 +21,7 @@ import EditCategoryModal from './components/EditCategoryModal.vue'
 import BackgroundLayer from './components/BackgroundLayer.vue'
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal.vue'
 import ContextMenu from './components/ContextMenu.vue'
-import { getDraggedCard, setDraggedCard } from './services/dragState'
+import { getDraggedCard, clearDragState } from './services/dragState'
 
 const config = ref<NavConfig>({ ...DEFAULT_CONFIG })
 const isLoaded = ref(false)
@@ -280,39 +280,40 @@ const handleDropCard = ({ targetCategoryId, targetIndex }: { targetCategoryId: s
   const currentDrag = getDraggedCard() || draggedCardInfo.value
   if (!currentDrag) return
 
-  const { categoryId: sourceCatId, index: sourceIndex } = currentDrag
+  const { categoryId: sourceCatId } = currentDrag
   const sourceCat = config.value.categories.find(c => c.id === sourceCatId)
   const targetCat = config.value.categories.find(c => c.id === targetCategoryId)
 
   if (!sourceCat || !targetCat) {
-    setDraggedCard(null)
+    clearDragState()
     draggedCardInfo.value = null
     return
   }
 
   // 1. 同分类内调整位置
   if (sourceCatId === targetCategoryId) {
-    if (sourceIndex === targetIndex || sourceIndex === targetIndex - 1) {
-      setDraggedCard(null)
+    const itemIdx = sourceCat.items.findIndex(i => i.id === currentDrag.item.id)
+    if (itemIdx === -1) {
+      clearDragState()
       draggedCardInfo.value = null
       return
     }
-    const [movedItem] = sourceCat.items.splice(sourceIndex, 1)
-    let newIndex = targetIndex
-    if (sourceIndex < targetIndex) {
-      newIndex = targetIndex - 1
-    }
-    sourceCat.items.splice(newIndex, 0, movedItem)
+    const [movedItem] = sourceCat.items.splice(itemIdx, 1)
+    const clampedIndex = Math.max(0, Math.min(targetIndex, sourceCat.items.length))
+    sourceCat.items.splice(clampedIndex, 0, movedItem)
   } else {
     // 2. 跨分类移动
-    const [movedItem] = sourceCat.items.splice(sourceIndex, 1)
-    const newIndex = Math.min(targetIndex, targetCat.items.length)
-    targetCat.items.splice(newIndex, 0, movedItem)
-    showToast(`已移动到「${targetCat.name}」`)
+    const itemIdx = sourceCat.items.findIndex(i => i.id === currentDrag.item.id)
+    if (itemIdx !== -1) {
+      const [movedItem] = sourceCat.items.splice(itemIdx, 1)
+      const clampedIndex = Math.max(0, Math.min(targetIndex, targetCat.items.length))
+      targetCat.items.splice(clampedIndex, 0, movedItem)
+      showToast(`已移动到「${targetCat.name}」`)
+    }
   }
 
   persistChanges()
-  setDraggedCard(null)
+  clearDragState()
   draggedCardInfo.value = null
 }
 
