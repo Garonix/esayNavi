@@ -216,7 +216,7 @@ const handleMouseLeave = () => {
         ? 'cursor-grab active:cursor-grabbing ring-2 ring-blue-500/40 bg-white/95 shadow-md app-jiggle' 
         : 'cursor-pointer hover:bg-slate-50/50'
     ]"
-    :title="isReordering ? '按住拖动可调整位置或跨分类移动' : item.title"
+    :title="item.title"
   >
     <!-- 极轻量跟随聚光灯高光 (仅反射光泽，绝不阻断心流) -->
     <div

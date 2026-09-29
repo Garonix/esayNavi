@@ -95,7 +95,7 @@ const handleConfirmDelete = () => {
               type="button"
               @click="showConfirmDelete = true"
               class="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-              title="删除分类"
+              title="删除"
             >
               <Trash2 class="w-4 h-4" />
             </button>
@@ -122,16 +122,11 @@ const handleConfirmDelete = () => {
             v-if="showConfirmDelete" 
             class="absolute inset-0 bg-white/98 backdrop-blur-xl p-5 flex flex-col justify-between z-20"
           >
-            <div class="flex items-start gap-3 pt-1">
-              <div class="w-9 h-9 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 flex-shrink-0">
-                <AlertTriangle class="w-5 h-5" />
+            <div class="flex items-center gap-3 pt-2">
+              <div class="w-8 h-8 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 flex-shrink-0">
+                <AlertTriangle class="w-4 h-4" />
               </div>
-              <div>
-                <h4 class="text-xs font-semibold text-slate-900 mb-1">确认删除该分类？</h4>
-                <p class="text-[11px] text-slate-500 leading-relaxed">
-                  删除后该分类与旗下站点将被移除。
-                </p>
-              </div>
+              <h4 class="text-xs font-semibold text-slate-900">删除「{{ category?.name }}」？</h4>
             </div>
 
             <div class="flex justify-end gap-2 pt-4 border-t border-slate-100">

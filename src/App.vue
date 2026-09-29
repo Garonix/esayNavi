@@ -260,12 +260,12 @@ const draggedCardInfo = ref<{
   index: number
 } | null>(null)
 
-const handleStartReorder = (item?: NavItem) => {
+const handleStartReorder = (_item?: NavItem) => {
   isReorderMode.value = true
   if (contextMenuState.value.show) {
     handleCloseContextMenu()
   }
-  showToast(item ? `进入编辑模式：长按拖动「${item.title}」调整位置` : '进入编辑模式：可直接拖动图标调整位置或跨分类移动')
+  showToast('调整模式')
 }
 
 const handleDragStartCard = (payload: { categoryId: string; item: NavItem; index: number }) => {
@@ -308,7 +308,7 @@ const handleDropCard = ({ targetCategoryId, targetIndex }: { targetCategoryId: s
       const [movedItem] = sourceCat.items.splice(itemIdx, 1)
       const clampedIndex = Math.max(0, Math.min(targetIndex, targetCat.items.length))
       targetCat.items.splice(clampedIndex, 0, movedItem)
-      showToast(`已移动到「${targetCat.name}」`)
+      showToast('已移动')
     }
   }
 
@@ -517,12 +517,12 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
             <div class="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 mb-3">
               <Search class="w-5 h-5" />
             </div>
-            <p class="text-xs font-medium text-slate-600 mb-4">无匹配站点</p>
+            <p class="text-xs font-medium text-slate-600 mb-4">无结果</p>
             <button
               @click="handleSearchSubmit(searchQuery, 'https://www.google.com/search?q=')"
               class="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium shadow-xs shadow-blue-500/20 transition-all active:scale-95"
             >
-              全网搜索
+              搜索
             </button>
           </div>
         </div>
@@ -576,7 +576,7 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
         @click="isZenMode = false"
         class="fixed bottom-6 right-6 z-50 px-3.5 py-1.5 rounded-full bg-slate-900/85 hover:bg-slate-900 text-white text-xs backdrop-blur-md border border-white/10 shadow-xl cursor-pointer transition-all flex items-center gap-2 select-none active:scale-95"
       >
-        <span>退出沉浸</span>
+        <span>退出</span>
         <span class="keycap text-[9px] px-1.5 py-0.2 bg-white/20 text-white border-white/20 border-b-white/40">Space</span>
       </div>
     </transition>
@@ -632,7 +632,7 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
       >
         <div class="flex items-center gap-2">
           <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span class="font-medium text-slate-200">图标调整中 · 拖动可跨分类排序</span>
+          <span class="font-medium text-slate-200">调整位置</span>
         </div>
         <button
           @click="isReorderMode = false"

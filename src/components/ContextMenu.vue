@@ -100,7 +100,7 @@ onUnmounted(() => {
           class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-blue-50 hover:text-blue-600 transition-colors text-left"
         >
           <ExternalLink class="w-3.5 h-3.5 text-slate-400" />
-          <span>新标签打开</span>
+          <span>新标签页</span>
         </button>
 
         <button
@@ -108,7 +108,7 @@ onUnmounted(() => {
           class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 transition-colors text-left"
         >
           <Copy class="w-3.5 h-3.5 text-slate-400" />
-          <span>复制链接</span>
+          <span>复制</span>
         </button>
 
         <button

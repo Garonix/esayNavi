@@ -176,7 +176,7 @@ const handleKeydown = (e: KeyboardEvent) => {
               @input="handleUrlInput"
               @paste="handleUrlInput"
               type="text"
-              placeholder="https://..."
+              placeholder="https://"
               required
               class="w-full bg-slate-50/80 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 focus:bg-white transition-all font-mono"
             />
@@ -223,12 +223,12 @@ const handleKeydown = (e: KeyboardEvent) => {
           <!-- 高级配置项 -->
           <div v-if="showAdvanced" class="space-y-3 pt-2 border-t border-slate-100">
             <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">标题</label>
+              <label class="block text-xs font-medium text-slate-600 mb-1">名称</label>
               <input
                 v-model="title"
                 @input="handleTitleInput"
                 type="text"
-                placeholder="标题"
+                placeholder="名称"
                 class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
               />
             </div>
@@ -255,7 +255,7 @@ const handleKeydown = (e: KeyboardEvent) => {
                 <input
                   v-model="icon"
                   type="text"
-                  placeholder="图标链接"
+                  placeholder="链接"
                   class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white transition-all font-mono"
                 />
                 <button

@@ -495,14 +495,12 @@ const getCategoryIcon = (iconName?: string) => {
         <div 
           @click="isCollapsed = !isCollapsed" 
           class="w-5 h-5 rounded-md bg-blue-50 flex items-center justify-center text-blue-600 transition-colors hover:bg-blue-100 cursor-pointer"
-          title="折叠/展开"
         >
           <component :is="getCategoryIcon(category.icon)" class="w-3.5 h-3.5" />
         </div>
         <h2 
           @click="$emit('editCategory', category)"
           class="text-xs font-semibold text-slate-800 tracking-tight hover:text-blue-600 transition-colors cursor-pointer"
-          title="编辑分类"
         >
           {{ category.name }}
         </h2>
@@ -532,28 +530,28 @@ const getCategoryIcon = (iconName?: string) => {
           @dragover="handleCardDragOver($event, card)"
           @drop="handleCardDrop($event)"
         >
-          <!-- 高质感半透明虚线凹槽占位符 (Ghost Slot) -->
+          <!-- 高质感半透明虚线凹槽占位符 (Ghost Slot - 纯净物理隐喻，零说教) -->
           <div
             v-if="card.isGhost"
-            class="ghost-card-slot w-full h-[94px] p-2.5 rounded-2xl border-2 border-dashed border-blue-400/80 bg-blue-50/40 backdrop-blur-xs flex flex-col items-center justify-center select-none shadow-[inset_0_2px_6px_rgba(59,130,246,0.08)] pointer-events-none transition-all duration-200"
+            class="ghost-card-slot w-full h-[94px] p-2.5 rounded-2xl border-2 border-dashed border-blue-400/70 bg-blue-50/40 backdrop-blur-xs flex flex-col items-center justify-center select-none shadow-[inset_0_2px_6px_rgba(59,130,246,0.06)] pointer-events-none transition-all duration-200"
           >
             <!-- 柔和微缩卡片虚影 -->
-            <div class="w-10 h-10 flex items-center justify-center opacity-30 grayscale scale-90">
+            <div class="w-10 h-10 flex items-center justify-center opacity-40 grayscale scale-95">
               <img
                 v-if="card.item.icon"
                 :src="card.item.icon"
-                class="w-8 h-8 object-contain"
+                class="w-9 h-9 object-contain"
               />
               <div
                 v-else
-                class="w-8 h-8 rounded-xl bg-blue-300 text-white font-bold text-xs flex items-center justify-center"
+                class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 text-white font-bold text-xs flex items-center justify-center shadow-2xs"
               >
                 {{ card.item.title.slice(0, 1) }}
               </div>
             </div>
-            <div class="w-full mt-1.5 px-1 text-center">
-              <span class="text-[10px] font-semibold text-blue-500/80 truncate block tracking-tight">
-                放置在此
+            <div class="w-full mt-2 px-1 text-center">
+              <span class="text-[11px] font-medium text-blue-600/50 truncate block tracking-tight leading-tight">
+                {{ card.item.title }}
               </span>
             </div>
           </div>

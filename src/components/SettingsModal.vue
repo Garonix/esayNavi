@@ -184,7 +184,7 @@ const handleMediaUpload = async (e: Event) => {
               <div class="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
                 <div>
                   <div class="flex justify-between text-[11px] font-medium text-slate-500 mb-1">
-                    <span>遮罩浓度</span>
+                    <span>遮罩</span>
                     <span class="font-mono text-slate-700">{{ bgConfig.opacity }}%</span>
                   </div>
                   <input
@@ -199,7 +199,7 @@ const handleMediaUpload = async (e: Event) => {
 
                 <div>
                   <div class="flex justify-between text-[11px] font-medium text-slate-500 mb-1">
-                    <span>毛玻璃模糊</span>
+                    <span>模糊</span>
                     <span class="font-mono text-slate-700">{{ bgConfig.blur }}px</span>
                   </div>
                   <input
@@ -215,7 +215,7 @@ const handleMediaUpload = async (e: Event) => {
 
               <!-- 视差开关 -->
               <div class="flex items-center justify-between text-xs text-slate-600 px-1">
-                <span>GPU 视差</span>
+                <span>视差</span>
                 <button
                   type="button"
                   @click="updateBg({ parallax: !bgConfig.parallax })"
@@ -250,7 +250,7 @@ const handleMediaUpload = async (e: Event) => {
                 class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 border border-slate-200 transition-all active:scale-[0.98]"
               >
                 <FolderSync class="w-3.5 h-3.5 text-blue-600" />
-                <span>{{ linkedFileName ? '切换文件' : '关联文件' }}</span>
+                <span>{{ linkedFileName ? '切换' : '关联' }}</span>
               </button>
 
               <button
@@ -292,7 +292,7 @@ const handleMediaUpload = async (e: Event) => {
             <span class="text-xs font-semibold text-slate-700 block">通用</span>
 
             <div class="flex items-center justify-between text-xs text-slate-600 px-1">
-              <span>新标签打开</span>
+              <span>新标签页</span>
               <button
                 @click="$emit('updateSettings', { openInNewTab: !config.settings.openInNewTab })"
                 class="w-8 h-4.5 rounded-full transition-colors relative p-0.5"
