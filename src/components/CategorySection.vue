@@ -317,13 +317,61 @@ const displayCards = computed<DisplayCard[]>(() => {
 // 图标位置调整拖拽事件处理
 const handleCardDragStart = (e: DragEvent, item: NavItem, index: number) => {
   if (!props.isReorderMode) return
-  setDraggedCard({ categoryId: props.category.id, item, index })
-  setDragHoverTarget({ categoryId: props.category.id, index })
-  emit('dragStartCard', { categoryId: props.category.id, item, index })
+
+  const targetEl = e.currentTarget as HTMLElement
+  const cardInner = (targetEl.querySelector('.glass-card') as HTMLElement) || targetEl
+  const rect = cardInner.getBoundingClientRect()
+
+  // 1. 精准测量鼠标指针相对于卡片的物理点击坐标
+  const rawOffsetX = e.clientX ? e.clientX - rect.left : rect.width / 2
+  const rawOffsetY = e.clientY ? e.clientY - rect.top : rect.height / 2
+  const offsetX = Math.max(8, Math.min(rawOffsetX, rect.width - 8))
+  const offsetY = Math.max(8, Math.min(rawOffsetY, rect.height - 8))
+
+  // 2. 制作专属、绝对水平（消除 app-jiggle 旋转与 transform 坐标系错位 BUG）、高清纯正的拖拽虚影 (Drag Image)
+  const clone = cardInner.cloneNode(true) as HTMLElement
+  clone.style.position = 'fixed'
+  clone.style.top = '-9999px'
+  clone.style.left = '-9999px'
+  clone.style.width = `${rect.width}px`
+  clone.style.height = `${rect.height}px`
+  clone.style.margin = '0'
+  clone.style.transform = 'none'
+  clone.style.animation = 'none'
+  clone.style.transition = 'none'
+  clone.style.opacity = '0.96'
+  clone.style.borderRadius = '16px'
+  clone.style.boxShadow = '0 16px 36px -4px rgba(0, 0, 0, 0.16), 0 6px 16px -2px rgba(59, 130, 246, 0.18)'
+  clone.style.pointerEvents = 'none'
+  clone.style.zIndex = '999999'
+
+  // 清除内部所有可能存在的晃动类名与 transform
+  clone.classList.remove('app-jiggle')
+
+  document.body.appendChild(clone)
+
   if (e.dataTransfer) {
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', item.id)
+    // 关键核心：将 Drag Image 锚点与鼠标指针在卡片内的点击点绝对重合！
+    e.dataTransfer.setDragImage(clone, offsetX, offsetY)
   }
+
+  // 下一帧清理离屏克隆节点
+  setTimeout(() => {
+    if (clone && clone.parentNode) {
+      clone.parentNode.removeChild(clone)
+    }
+  }, 0)
+
+  // 关键核心 2：延迟一帧（setTimeout 0）更新全局响应式状态！
+  // 必须等待浏览器完全捕获并锁定了实体卡片的 Drag Image 之后，原位卡片才转化为半透明占位凹槽！
+  // 彻底根除 DOM 突变引发的 Chromium 拖拽图像消失或坐标错位崩溃
+  setTimeout(() => {
+    setDraggedCard({ categoryId: props.category.id, item, index })
+    setDragHoverTarget({ categoryId: props.category.id, index })
+    emit('dragStartCard', { categoryId: props.category.id, item, index })
+  }, 0)
 }
 
 const handleCardDragEnd = () => {
@@ -388,6 +436,40 @@ const handleSectionDragOver = (e: DragEvent) => {
     if (e.dataTransfer) {
       e.dataTransfer.dropEffect = 'move'
     }
+
+    // 智能欧氏距离探测：若光标划过卡片缝隙或空白区，精准吸附至物理距离最近的卡片单元格，绝不误跳末尾
+    const gridEl = reelGridRef.value?.$el || reelGridRef.value
+    if (gridEl) {
+      const cardNodes = Array.from(gridEl.querySelectorAll('.wave-card-wrapper')) as HTMLElement[]
+      let closestIdx = -1
+      let minDistance = Infinity
+
+      for (let i = 0; i < cardNodes.length; i++) {
+        const node = cardNodes[i]
+        const r = node.getBoundingClientRect()
+        const centerX = r.left + r.width / 2
+        const centerY = r.top + r.height / 2
+        const dist = Math.hypot(e.clientX - centerX, e.clientY - centerY)
+        if (dist < minDistance) {
+          minDistance = dist
+          closestIdx = i
+        }
+      }
+
+      if (closestIdx !== -1) {
+        const nonGhostCards = displayCards.value.filter(c => !c.isGhost)
+        const clampedTarget = Math.max(0, Math.min(closestIdx, nonGhostCards.length))
+        const currentHover = getDragHoverTarget()
+        if (!currentHover || currentHover.categoryId !== props.category.id || currentHover.index !== clampedTarget) {
+          setDragHoverTarget({
+            categoryId: props.category.id,
+            index: clampedTarget
+          })
+        }
+        return
+      }
+    }
+
     const currentHover = getDragHoverTarget()
     if (!currentHover || currentHover.categoryId !== props.category.id) {
       const nonGhostCards = displayCards.value.filter(c => !c.isGhost)

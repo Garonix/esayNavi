@@ -261,12 +261,21 @@ const draggedCardInfo = ref<{
 } | null>(null)
 
 const handleStartReorder = (_item?: NavItem) => {
+  clearDragState()
+  draggedCardInfo.value = null
   isReorderMode.value = true
   if (contextMenuState.value.show) {
     handleCloseContextMenu()
   }
   showToast('调整模式')
 }
+
+watch(isReorderMode, (val) => {
+  if (!val) {
+    clearDragState()
+    draggedCardInfo.value = null
+  }
+})
 
 const handleDragStartCard = (payload: { categoryId: string; item: NavItem; index: number }) => {
   draggedCardInfo.value = payload

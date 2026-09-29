@@ -290,4 +290,11 @@ const handleMouseLeave = () => {
 :global(.wave-card-wrapper:nth-child(odd) .app-jiggle) {
   animation: app-jiggle-odd 0.25s infinite ease-in-out;
 }
+
+:global(.wave-card-wrapper .app-jiggle:active) {
+  animation: none !important;
+  transform: scale(1.05) translateY(-2px) !important;
+  box-shadow: 0 16px 32px -4px rgba(59, 130, 246, 0.28) !important;
+  z-index: 40 !important;
+}
 </style>
