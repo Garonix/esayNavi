@@ -314,9 +314,20 @@ const displayCards = computed<DisplayCard[]>(() => {
   }))
 })
 
+// 拖拽物理动力学与滞回状态
+let dragStartPointerX = 0
+let dragStartPointerY = 0
+let isDragDeadzoneExceeded = false
+let lastReorderTime = 0
+
 // 图标位置调整拖拽事件处理
 const handleCardDragStart = (e: DragEvent, item: NavItem, index: number) => {
   if (!props.isReorderMode) return
+
+  dragStartPointerX = e.clientX || 0
+  dragStartPointerY = e.clientY || 0
+  isDragDeadzoneExceeded = false
+  lastReorderTime = Date.now()
 
   const targetEl = e.currentTarget as HTMLElement
   const cardInner = (targetEl.querySelector('.glass-card') as HTMLElement) || targetEl
@@ -344,7 +355,6 @@ const handleCardDragStart = (e: DragEvent, item: NavItem, index: number) => {
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', item.id)
     // 关键核心：直接将已经在屏幕上完整渲染的真实卡片设为 Drag Image，并锚定于图标中心
-    // 彻底根除因离屏克隆节点被丢弃导致回退至 (0, 0) 所引起的向右偏移一个图标宽度 BUG
     try {
       e.dataTransfer.setDragImage(cardInner, iconCenterX, iconCenterY)
     } catch {
@@ -362,6 +372,7 @@ const handleCardDragStart = (e: DragEvent, item: NavItem, index: number) => {
 }
 
 const handleCardDragEnd = () => {
+  isDragDeadzoneExceeded = false
   clearDragState()
   emit('dragEndCard')
 }
@@ -375,21 +386,49 @@ const handleCardDragOver = (e: DragEvent, card: DisplayCard) => {
     e.dataTransfer.dropEffect = 'move'
   }
 
-  // 若悬停在占位凹槽本身，保持当前坑位，避免左右抖动
+  // 1. 若悬停在占位凹槽本身，绝对锁定当前坑位，拦截冒泡，避免上下抖动
   if (card.isGhost) return
 
+  // 2. 起拖死区保护：在鼠标位移未超过 18px 之前，严禁挤占任何卡片，死死锁定原位！
+  // 彻底根除“刚进入换位模式时下一次拖动必定偏移”的微动误判 BUG
+  if (!isDragDeadzoneExceeded) {
+    const dist = Math.hypot(e.clientX - dragStartPointerX, e.clientY - dragStartPointerY)
+    if (dist < 18) {
+      return
+    }
+    isDragDeadzoneExceeded = true
+  }
+
+  // 3. 防抖冷却锁：若刚刚发生过挤占换位（160ms 内），等待 FLIP 平滑过渡，禁止高频来回抽搐
+  const now = Date.now()
+  if (now - lastReorderTime < 160) {
+    return
+  }
+
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  if (rect.width <= 0) return
   const mouseX = e.clientX - rect.left
-  const isRightHalf = mouseX > rect.width * 0.5
+  const ratio = mouseX / rect.width
 
   const nonGhostCards = displayCards.value.filter(c => !c.isGhost)
   const targetItemIndex = nonGhostCards.findIndex(c => c.id === card.id)
   if (targetItemIndex === -1) return
 
-  const targetIndex = isRightHalf ? targetItemIndex + 1 : targetItemIndex
+  // 4. 物理滞回算法（40% / 60% 深度穿透阈值，中间 20% 为死区 Deadband）
+  // 深入目标卡片超过 62% 才向右后插，深入目标卡片前 38% 才向左前插，彻底消除反复跳动
+  let targetIndex: number
+  if (ratio > 0.62) {
+    targetIndex = targetItemIndex + 1
+  } else if (ratio < 0.38) {
+    targetIndex = targetItemIndex
+  } else {
+    // 落在 38% ~ 62% 滞回稳定区内，保持当前坑位，避免左右反复弹跳！
+    return
+  }
 
   const currentHover = getDragHoverTarget()
   if (!currentHover || currentHover.categoryId !== props.category.id || currentHover.index !== targetIndex) {
+    lastReorderTime = now
     setDragHoverTarget({
       categoryId: props.category.id,
       index: targetIndex
@@ -424,47 +463,18 @@ const handleSectionDragOver = (e: DragEvent) => {
       e.dataTransfer.dropEffect = 'move'
     }
 
-    // 智能欧氏距离探测：若光标划过卡片缝隙或空白区，精准吸附至物理距离最近的卡片单元格，绝不误跳末尾
-    const gridEl = reelGridRef.value?.$el || reelGridRef.value
-    if (gridEl) {
-      const cardNodes = Array.from(gridEl.querySelectorAll('.wave-card-wrapper')) as HTMLElement[]
-      let closestIdx = -1
-      let minDistance = Infinity
-
-      for (let i = 0; i < cardNodes.length; i++) {
-        const node = cardNodes[i]
-        const r = node.getBoundingClientRect()
-        const centerX = r.left + r.width / 2
-        const centerY = r.top + r.height / 2
-        const dist = Math.hypot(e.clientX - centerX, e.clientY - centerY)
-        if (dist < minDistance) {
-          minDistance = dist
-          closestIdx = i
-        }
-      }
-
-      if (closestIdx !== -1) {
-        const nonGhostCards = displayCards.value.filter(c => !c.isGhost)
-        const clampedTarget = Math.max(0, Math.min(closestIdx, nonGhostCards.length))
-        const currentHover = getDragHoverTarget()
-        if (!currentHover || currentHover.categoryId !== props.category.id || currentHover.index !== clampedTarget) {
-          setDragHoverTarget({
-            categoryId: props.category.id,
-            index: clampedTarget
-          })
-        }
-        return
-      }
-    }
-
+    // 若当前分类已有有效的悬停目标，绝对不要被外层容器的欧氏距离盲目改写
     const currentHover = getDragHoverTarget()
-    if (!currentHover || currentHover.categoryId !== props.category.id) {
-      const nonGhostCards = displayCards.value.filter(c => !c.isGhost)
-      setDragHoverTarget({
-        categoryId: props.category.id,
-        index: nonGhostCards.length
-      })
+    if (currentHover && currentHover.categoryId === props.category.id) {
+      return
     }
+
+    // 跨分类拖入本分类且尚未击中任何具体卡片时的平滑吸附兜底
+    const nonGhostCards = displayCards.value.filter(c => !c.isGhost)
+    setDragHoverTarget({
+      categoryId: props.category.id,
+      index: nonGhostCards.length
+    })
   } else {
     handleDragOver(e)
   }
@@ -602,7 +612,7 @@ const getCategoryIcon = (iconName?: string) => {
           <!-- 高质感半透明虚线凹槽占位符 (Ghost Slot - 纯净物理隐喻，零说教) -->
           <div
             v-if="card.isGhost"
-            class="ghost-card-slot w-full h-[94px] p-2.5 rounded-2xl border-2 border-dashed border-blue-400/70 bg-blue-50/40 backdrop-blur-xs flex flex-col items-center justify-center select-none shadow-[inset_0_2px_6px_rgba(59,130,246,0.06)] pointer-events-none transition-all duration-200"
+            class="ghost-card-slot w-full h-[94px] p-2.5 rounded-2xl border-2 border-dashed border-blue-400/70 bg-blue-50/40 backdrop-blur-xs flex flex-col items-center justify-center select-none shadow-[inset_0_2px_6px_rgba(59,130,246,0.06)] transition-all duration-200"
           >
             <!-- 柔和微缩卡片虚影 -->
             <div class="w-10 h-10 flex items-center justify-center opacity-40 grayscale scale-95">
