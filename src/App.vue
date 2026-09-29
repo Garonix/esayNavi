@@ -21,7 +21,13 @@ import EditCategoryModal from './components/EditCategoryModal.vue'
 import BackgroundLayer from './components/BackgroundLayer.vue'
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal.vue'
 import ContextMenu from './components/ContextMenu.vue'
-import { getDraggedCard, clearDragState } from './services/dragState'
+import { 
+  getDraggedCard, 
+  clearDragState,
+  activeFloatingCard,
+  floatingPointer,
+  updateFloatingPointer
+} from './services/dragState'
 
 const config = ref<NavConfig>({ ...DEFAULT_CONFIG })
 const isLoaded = ref(false)
@@ -73,14 +79,37 @@ const persistChanges = async () => {
   }
 }
 
+const getFloatingIcon = (item: NavItem) => {
+  if (item.icon && item.icon.trim()) return item.icon.trim()
+  return getFaviconUrl(item.url, item.title)
+}
+
+// 浮动卡片坐标计算：卡片标准尺寸 116px * 94px，图标几何正中心水平 58px，垂直 35.5px
+// 鼠标指针严格、零误差（0.0px）对齐在图标几何正中心！
+const floatingCardStyle = computed(() => {
+  const x = floatingPointer.value.x - 58
+  const y = floatingPointer.value.y - 35.5
+  return {
+    transform: `translate3d(${x}px, ${y}px, 0)`
+  }
+})
+
+const handleGlobalDragOver = (e: DragEvent) => {
+  if (isReorderMode.value && activeFloatingCard.value && e.clientX && e.clientY) {
+    updateFloatingPointer(e.clientX, e.clientY)
+  }
+}
+
 onMounted(async () => {
   config.value = await loadInitialConfig()
   isLoaded.value = true
   window.addEventListener('keydown', handleGlobalKeydown)
+  window.addEventListener('dragover', handleGlobalDragOver, { passive: true })
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleGlobalKeydown)
+  window.removeEventListener('dragover', handleGlobalDragOver)
 })
 
 const isZenMode = ref(false)
@@ -684,5 +713,34 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
         <span>{{ toastMessage }}</span>
       </div>
     </transition>
+
+    <!-- 调整模式下专属：超丝滑、零延迟、绝对跟手的高清浮动虚影 (Custom Floating Drag Ghost) -->
+    <div
+      v-if="isReorderMode && activeFloatingCard"
+      class="fixed top-0 left-0 pointer-events-none z-[9999999] will-change-transform"
+      :style="floatingCardStyle"
+    >
+      <div class="glass-card w-[116px] h-[94px] p-2.5 rounded-2xl flex flex-col items-center justify-center bg-white/95 shadow-[0_20px_45px_-4px_rgba(59,130,246,0.32),0_8px_20px_-2px_rgba(0,0,0,0.12)] ring-2 ring-blue-500 scale-105 select-none">
+        <div class="w-10 h-10 flex items-center justify-center flex-shrink-0">
+          <img
+            v-if="getFloatingIcon(activeFloatingCard)"
+            :src="getFloatingIcon(activeFloatingCard)"
+            class="w-9 h-9 object-contain drop-shadow-md"
+            @error="($event.target as HTMLElement).style.display = 'none'"
+          />
+          <div 
+            v-else 
+            class="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-sm flex items-center justify-center shadow-xs"
+          >
+            {{ activeFloatingCard.title.slice(0, 1) }}
+          </div>
+        </div>
+        <div class="w-full mt-2 px-1 text-center">
+          <span class="text-[11px] font-medium text-slate-700 truncate block tracking-tight leading-tight">
+            {{ activeFloatingCard.title }}
+          </span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>

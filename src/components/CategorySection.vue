@@ -17,6 +17,8 @@ import {
   getDraggedCard,
   setDragHoverTarget,
   getDragHoverTarget,
+  setFloatingCard,
+  updateFloatingPointer,
   clearDragState
 } from '../services/dragState'
 
@@ -320,6 +322,13 @@ let dragStartPointerY = 0
 let isDragDeadzoneExceeded = false
 let lastReorderTime = 0
 
+// 1x1 纯透明图片单例（用于彻底隐蔽操作系统层级错位且延迟的原生 DragImage）
+let transparentDragImage: HTMLImageElement | null = null
+if (typeof window !== 'undefined') {
+  transparentDragImage = new Image()
+  transparentDragImage.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+}
+
 // 图标位置调整拖拽事件处理
 const handleCardDragStart = (e: DragEvent, item: NavItem, index: number) => {
   if (!props.isReorderMode) return
@@ -329,41 +338,24 @@ const handleCardDragStart = (e: DragEvent, item: NavItem, index: number) => {
   isDragDeadzoneExceeded = false
   lastReorderTime = Date.now()
 
-  const targetEl = e.currentTarget as HTMLElement
-  const cardInner = (targetEl.querySelector('.glass-card') as HTMLElement) || targetEl
-  const cardRect = cardInner.getBoundingClientRect()
-
-  // 1. 严格计算图标几何正中心（相对于卡片左上角）
-  // 用户第一心流锚点是图标，拖拽起拖时鼠标指针分毫不差、绝对钉在图标正中心！
-  const iconEl = cardInner.querySelector('img') || cardInner.querySelector('.w-9')
-  let iconCenterX = cardRect.width / 2
-  let iconCenterY = cardRect.height / 2
-
-  if (iconEl) {
-    const iconRect = iconEl.getBoundingClientRect()
-    iconCenterX = (iconRect.left + iconRect.width / 2) - cardRect.left
-    iconCenterY = (iconRect.top + iconRect.height / 2) - cardRect.top
-  } else {
-    iconCenterY = 36
-  }
-
-  // 2. 临时去除卡片本身的晃动与倾斜，确保生成的拖拽图像绝对水平正直
-  cardInner.style.animation = 'none'
-  cardInner.style.transform = 'none'
+  // 1. 激活纯前端超丝滑、零延迟、绝对跟手的高清浮动虚影（彻底根除 Linux/高 DPI 下原生 setDragImage 偏右一个图标宽度的顽疾）
+  setFloatingCard(item, e.clientX || 0, e.clientY || 0)
 
   if (e.dataTransfer) {
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', item.id)
-    // 关键核心：直接将已经在屏幕上完整渲染的真实卡片设为 Drag Image，并锚定于图标中心
+    // 2. 将错位且模糊的原生操作系统拖拽图层替换为 1x1 透明图片，彻底隐蔽
     try {
-      e.dataTransfer.setDragImage(cardInner, iconCenterX, iconCenterY)
+      if (transparentDragImage) {
+        e.dataTransfer.setDragImage(transparentDragImage, 0, 0)
+      }
     } catch {
       // 兼容兜底
     }
   }
 
-  // 3. 关键核心：延迟一帧（setTimeout 0）更新全局响应式状态！
-  // 必须等待浏览器完全捕获并锁定了实体卡片的 Drag Image 之后，原位卡片才转化为半透明占位凹槽！
+  // 3. 延迟一帧（setTimeout 0）更新全局响应式状态！
+  // 必须等待浏览器完全捕获并锁定了拖拽事件之后，原位卡片才转化为半透明占位凹槽！
   setTimeout(() => {
     setDraggedCard({ categoryId: props.category.id, item, index })
     setDragHoverTarget({ categoryId: props.category.id, index })
@@ -373,6 +365,7 @@ const handleCardDragStart = (e: DragEvent, item: NavItem, index: number) => {
 
 const handleCardDragEnd = () => {
   isDragDeadzoneExceeded = false
+  setFloatingCard(null)
   clearDragState()
   emit('dragEndCard')
 }
@@ -384,6 +377,11 @@ const handleCardDragOver = (e: DragEvent, card: DisplayCard) => {
   e.stopPropagation()
   if (e.dataTransfer) {
     e.dataTransfer.dropEffect = 'move'
+  }
+
+  // 实时跟手更新浮动卡片坐标
+  if (e.clientX && e.clientY) {
+    updateFloatingPointer(e.clientX, e.clientY)
   }
 
   // 1. 若悬停在占位凹槽本身，绝对锁定当前坑位，拦截冒泡，避免上下抖动
@@ -448,6 +446,7 @@ const handleCardDrop = (e: DragEvent) => {
     finalTargetIndex = currentHover.index
   }
 
+  setFloatingCard(null)
   emit('dropCard', {
     targetCategoryId: props.category.id,
     targetIndex: finalTargetIndex

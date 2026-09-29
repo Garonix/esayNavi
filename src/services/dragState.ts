@@ -15,6 +15,8 @@ export interface DragHoverTarget {
 // 全局响应式与即时共享的拖拽状态
 export const activeDraggedCard = ref<DraggedItemInfo | null>(null)
 export const dragHoverTarget = ref<DragHoverTarget | null>(null)
+export const activeFloatingCard = ref<NavItem | null>(null)
+export const floatingPointer = ref({ x: 0, y: 0 })
 
 export function setDraggedCard(info: DraggedItemInfo | null) {
   activeDraggedCard.value = info
@@ -32,7 +34,17 @@ export function getDragHoverTarget(): DragHoverTarget | null {
   return dragHoverTarget.value
 }
 
+export function setFloatingCard(item: NavItem | null, x = 0, y = 0) {
+  activeFloatingCard.value = item
+  floatingPointer.value = { x, y }
+}
+
+export function updateFloatingPointer(x: number, y: number) {
+  floatingPointer.value = { x, y }
+}
+
 export function clearDragState() {
   activeDraggedCard.value = null
   dragHoverTarget.value = null
+  activeFloatingCard.value = null
 }
