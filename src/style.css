@@ -1,0 +1,226 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply m-0 p-0 antialiased select-none font-sans overflow-x-hidden;
+    background: #ffffff;
+    color: #0f172a;
+    min-height: 100vh;
+  }
+
+  /* 极简细窄滚动条 */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.35);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.6);
+  }
+}
+
+/* ==========================================================================
+   现代极简几何底纹与点阵网格（Subtle Dot Matrix）
+   ========================================================================== */
+.bg-grid-pattern {
+  background-image: radial-gradient(rgba(148, 163, 184, 0.15) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* ==========================================================================
+   蓝白环境光晕（Aurora Breathing Light）
+   ========================================================================== */
+.aurora-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.aurora-blob {
+  position: absolute;
+  filter: blur(120px);
+  border-radius: 9999px;
+  opacity: 0.55;
+  will-change: transform;
+}
+
+.aurora-blob-1 {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(147, 197, 253, 0.45) 0%, rgba(191, 219, 254, 0.15) 70%, transparent 100%);
+  top: -120px;
+  left: 15%;
+  animation: float-1 26s infinite alternate ease-in-out;
+}
+
+.aurora-blob-2 {
+  width: 550px;
+  height: 550px;
+  background: radial-gradient(circle, rgba(186, 230, 253, 0.4) 0%, rgba(224, 242, 254, 0.1) 70%, transparent 100%);
+  top: 30%;
+  right: 12%;
+  animation: float-2 30s infinite alternate ease-in-out;
+}
+
+.aurora-blob-3 {
+  width: 480px;
+  height: 480px;
+  background: radial-gradient(circle, rgba(199, 210, 254, 0.35) 0%, rgba(224, 231, 255, 0.1) 70%, transparent 100%);
+  bottom: 5%;
+  left: 25%;
+  animation: float-3 28s infinite alternate ease-in-out;
+}
+
+@keyframes float-1 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(50px, -40px) scale(1.1); }
+  100% { transform: translate(-30px, 30px) scale(0.95); }
+}
+
+@keyframes float-2 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-60px, 40px) scale(1.08); }
+  100% { transform: translate(40px, -50px) scale(0.92); }
+}
+
+@keyframes float-3 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(40px, 30px) scale(1.05); }
+  100% { transform: translate(-50px, -30px) scale(0.98); }
+}
+
+/* ==========================================================================
+   现代扁平卡片（Borderless Flat Design with Spring Physics）
+   ========================================================================== */
+.glass-card {
+  position: relative;
+  background: transparent;
+  border: 1px solid transparent;
+  box-shadow: none;
+  transition: 
+    transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.2s ease;
+  will-change: transform, box-shadow, background-color;
+}
+
+.glass-card:hover {
+  background: rgba(241, 245, 249, 0.75);
+  border-color: transparent;
+  transform: translateY(-2px);
+  box-shadow: 
+    0 8px 16px -4px rgba(15, 23, 42, 0.05),
+    0 2px 6px -1px rgba(15, 23, 42, 0.02);
+}
+
+.glass-card:active {
+  transform: translateY(0) scale(0.96);
+  background: rgba(226, 232, 240, 0.8);
+  box-shadow: none;
+  transition-duration: 0.08s;
+}
+
+/* ==========================================================================
+   现代毛玻璃浮层面板（Crisp Frosted Glass）
+   ========================================================================== */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  box-shadow: 
+    0 20px 40px -15px rgba(15, 23, 42, 0.08),
+    0 8px 16px -6px rgba(15, 23, 42, 0.04),
+    0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+}
+
+/* 键盘按键徽章样式（Physical Keycap Style） */
+.keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 600;
+  line-height: 1;
+  border-radius: 5px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-bottom: 2px solid #94a3b8;
+  color: #475569;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+/* ==========================================================================
+   Vue TransitionGroup 列表 FLIP 重排平滑过渡
+   ========================================================================== */
+.card-grid-move,
+.card-grid-enter-active,
+.card-grid-leave-active {
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card-grid-enter-from {
+  opacity: 0;
+  transform: translateY(10px) scale(0.96);
+}
+
+.card-grid-leave-to {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+.card-grid-leave-active {
+  position: absolute;
+}
+
+/* ==========================================================================
+   聚焦与流光微动效
+   ========================================================================== */
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.92); }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2.5s infinite ease-in-out;
+}
+
+/* 光束微扫过卡片 */
+@keyframes shimmer-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.shimmer-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer-effect::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 100%
+  );
+  transform: translateX(-100%);
+  pointer-events: none;
+}
+
+.shimmer-effect:hover::after {
+  animation: shimmer-sweep 0.75s ease-out;
+}

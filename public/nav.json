@@ -1,0 +1,392 @@
+{
+  "version": "1.1.0",
+  "settings": {
+    "title": "EasyNavi",
+    "theme": "light",
+    "background": "white",
+    "searchEngine": "google",
+    "openInNewTab": true,
+    "showClock": false,
+    "showSearch": true
+  },
+  "categories": [
+    {
+      "id": "flare",
+      "name": "常用应用",
+      "icon": "sparkles",
+      "items": [
+        {
+          "id": "item-flare-1",
+          "title": "哔哩哔哩",
+          "url": "https://www.bilibili.com/",
+          "icon": "https://www.bilibili.com/favicon.ico",
+          "pinned": true
+        },
+        {
+          "id": "item-flare-2",
+          "title": "赫尔墨斯",
+          "url": "http://192.168.3.25:8648/",
+          "icon": "http://192.168.3.25:8648/favicon.ico",
+          "pinned": true
+        },
+        {
+          "id": "item-flare-3",
+          "title": "油管",
+          "url": "https://www.youtube.com",
+          "icon": "https://www.youtube.com/favicon.ico",
+          "pinned": true
+        },
+        {
+          "id": "item-flare-4",
+          "title": "代码托管",
+          "url": "https://www.github.com",
+          "icon": "https://github.githubassets.com/favicons/favicon.svg",
+          "pinned": true
+        },
+        {
+          "id": "item-flare-5",
+          "title": "域名托管",
+          "url": "https://dash.cloudflare.com/login",
+          "icon": "https://dash.cloudflare.com/favicon.ico",
+          "pinned": true
+        },
+        {
+          "id": "item-flare-6",
+          "title": "编程练习",
+          "url": "https://leetcode.cn/studyplan/top-interview-150/",
+          "icon": "https://leetcode.cn/favicon.ico",
+          "pinned": true
+        },
+        {
+          "id": "item-flare-7",
+          "title": "打洞",
+          "url": "http://104.224.154.67:11211/",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/wireguard.png",
+          "pinned": true
+        },
+        {
+          "id": "item-flare-8",
+          "title": "微信",
+          "url": "https://wechat.zeges.top",
+          "icon": "https://res.wx.qq.com/a/wx_fed/assets/res/NTI4MWU5.ico",
+          "pinned": true
+        },
+        {
+          "id": "item-flare-9",
+          "title": "模型桥接",
+          "url": "http://192.168.3.25:8317/management.html#",
+          "icon": "",
+          "pinned": true
+        },
+        {
+          "id": "item-flare-10",
+          "title": "代理池",
+          "url": "http://192.168.3.25:9090/ui/#/overview",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/clash.png",
+          "pinned": true
+        }
+      ]
+    },
+    {
+      "id": "lan1",
+      "name": "内网服务",
+      "icon": "code-xml",
+      "items": [
+        {
+          "id": "item-1-1",
+          "title": "fnos",
+          "url": "https://nas.zeges.top",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/truenas.png",
+          "pinned": false
+        },
+        {
+          "id": "item-1-2",
+          "title": "router",
+          "url": "http://192.168.3.1",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/openwrt.png",
+          "pinned": false
+        },
+        {
+          "id": "item-1-3",
+          "title": "openwrt",
+          "url": "http://192.168.3.2",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/openwrt.png",
+          "pinned": false
+        },
+        {
+          "id": "item-1-4",
+          "title": "dockge",
+          "url": "http://192.168.3.24:9025/",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/docker.png",
+          "pinned": false
+        },
+        {
+          "id": "item-1-5",
+          "title": "lucky",
+          "url": "http://192.168.3.24:16601/mixa/#/about",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/lucky.png",
+          "pinned": false
+        },
+        {
+          "id": "item-1-6",
+          "title": "qbit",
+          "url": "http://192.168.3.24:9001/",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/qbittorrent.png",
+          "pinned": false
+        },
+        {
+          "id": "item-1-7",
+          "title": "transmission",
+          "url": "http://192.168.3.24:9002/",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/transmission.png",
+          "pinned": false
+        },
+        {
+          "id": "item-1-8",
+          "title": "ikaros",
+          "url": "http://192.168.3.24:9014/",
+          "icon": "http://192.168.3.24:9014/favicon.ico",
+          "pinned": false
+        },
+        {
+          "id": "item-1-9",
+          "title": "homeassistant",
+          "url": "http://192.168.3.24:8123/",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/home-assistant.png",
+          "pinned": false
+        },
+        {
+          "id": "item-1-10",
+          "title": "nexterm",
+          "url": "http://192.168.3.24:9019/",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/powershell.png",
+          "pinned": false
+        },
+        {
+          "id": "item-1-11",
+          "title": "qbit-outer",
+          "url": "http://192.168.3.24:9028/",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/qbittorrent.png",
+          "pinned": false
+        },
+        {
+          "id": "item-1-12",
+          "title": "PDF",
+          "url": "http://192.168.3.24:9033",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/stirling-pdf.png",
+          "pinned": false
+        },
+        {
+          "id": "item-1-13",
+          "title": "board",
+          "url": "http://192.168.3.24:9029",
+          "icon": "",
+          "pinned": false
+        },
+        {
+          "id": "item-1-14",
+          "title": "sslinker",
+          "url": "http://192.168.3.24:9037",
+          "icon": "http://192.168.3.24:9037/favicon.ico",
+          "pinned": false
+        },
+        {
+          "id": "item-1-15",
+          "title": "anirss",
+          "url": "http://192.168.3.24:9024",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/freshrss.png",
+          "pinned": false
+        },
+        {
+          "id": "item-1-16",
+          "title": "promptManager",
+          "url": "http://192.168.3.24:9045/",
+          "icon": "",
+          "pinned": false
+        }
+      ]
+    },
+    {
+      "id": "wan1",
+      "name": "外网服务 1",
+      "icon": "folder",
+      "items": [
+        {
+          "id": "item-wan1-1",
+          "title": "draw",
+          "url": "https://draw.zeges.top",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/excalidraw.png",
+          "pinned": false
+        },
+        {
+          "id": "item-wan1-2",
+          "title": "alist",
+          "url": "https://alist.zeges.top",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/alist.png",
+          "pinned": false
+        },
+        {
+          "id": "item-wan1-3",
+          "title": "bitwarden",
+          "url": "https://bitwarden.zeges.top",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/bitwarden.png",
+          "pinned": false
+        },
+        {
+          "id": "item-wan1-4",
+          "title": "blog",
+          "url": "https://blog.zeges.top",
+          "icon": "https://www.google.com/s2/favicons?domain=blog.zeges.top&sz=128",
+          "pinned": false
+        },
+        {
+          "id": "item-wan1-5",
+          "title": "emby",
+          "url": "https://emby.zeges.top",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/emby.png",
+          "pinned": false
+        },
+        {
+          "id": "item-wan1-6",
+          "title": "homeassistant",
+          "url": "https://ha.zeges.top",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/home-assistant.png",
+          "pinned": false
+        },
+        {
+          "id": "item-wan1-7",
+          "title": "lsky",
+          "url": "https://img.zeges.top",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/lsky-pro.png",
+          "pinned": false
+        },
+        {
+          "id": "item-wan1-8",
+          "title": "komga",
+          "url": "https://komga.zeges.top",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/komga.png",
+          "pinned": false
+        },
+        {
+          "id": "item-wan1-9",
+          "title": "memos",
+          "url": "https://memos.zeges.top",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/memos.png",
+          "pinned": false
+        },
+        {
+          "id": "item-wan1-10",
+          "title": "navidrome",
+          "url": "https://navidrome.zeges.top",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/navidrome.png",
+          "pinned": false
+        },
+        {
+          "id": "item-wan1-11",
+          "title": "immich",
+          "url": "https://photo.zeges.top",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/immich.png",
+          "pinned": false
+        },
+        {
+          "id": "item-wan1-12",
+          "title": "npm",
+          "url": "https://npm.zeges.top",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/nginx-proxy-manager.png",
+          "pinned": false
+        },
+        {
+          "id": "item-wan1-13",
+          "title": "tie",
+          "url": "https://tie.zeges.top",
+          "icon": "https://www.google.com/s2/favicons?domain=tie.zeges.top&sz=128",
+          "pinned": false
+        }
+      ]
+    },
+    {
+      "id": "wan2",
+      "name": "外网服务 2",
+      "icon": "folder",
+      "items": [
+        {
+          "id": "item-2-1",
+          "title": "Img-Api",
+          "url": "https://api-img.zeges.top",
+          "icon": "https://www.google.com/s2/favicons?domain=api-img.zeges.top&sz=128",
+          "pinned": false
+        },
+        {
+          "id": "item-2-2",
+          "title": "gitea",
+          "url": "https://gitea.zeges.top",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/gitea.png",
+          "pinned": false
+        },
+        {
+          "id": "item-2-3",
+          "title": "kit",
+          "url": "https://kit.zeges.top/",
+          "icon": "https://www.google.com/s2/favicons?domain=kit.zeges.top&sz=128",
+          "pinned": false
+        },
+        {
+          "id": "item-2-4",
+          "title": "drop",
+          "url": "https://drop.zeges.top",
+          "icon": "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/dropbox.png",
+          "pinned": false
+        }
+      ]
+    },
+    {
+      "id": "ai",
+      "name": "AI 助手",
+      "icon": "sparkles",
+      "items": [
+        {
+          "id": "item-ai-1",
+          "title": "Google AI Studio",
+          "url": "https://aistudio.google.com/prompts/new_chat",
+          "icon": "https://aistudio.google.com/favicon.ico",
+          "pinned": false
+        },
+        {
+          "id": "item-ai-2",
+          "title": "gemini",
+          "url": "https://gemini.google.com/app",
+          "icon": "https://www.gstatic.com/lamda/images/favicon_v1_150160cddff7f294ce30.svg",
+          "pinned": false
+        },
+        {
+          "id": "item-ai-3",
+          "title": "ChatGPT",
+          "url": "https://chatgpt.com",
+          "icon": "https://chatgpt.com/favicon.ico",
+          "pinned": false
+        },
+        {
+          "id": "item-ai-4",
+          "title": "Grok",
+          "url": "https://grok.com/",
+          "icon": "https://grok.com/favicon.ico",
+          "pinned": false
+        },
+        {
+          "id": "item-ai-5",
+          "title": "DeepSeek",
+          "url": "https://deepseek.com/",
+          "icon": "https://cdn.deepseek.com/chat/favicon.ico",
+          "pinned": false
+        },
+        {
+          "id": "item-ai-6",
+          "title": "Qwen",
+          "url": "https://chat.qwen.ai/",
+          "icon": "https://img.alicdn.com/imgextra/i4/O1CN01f9Tj5w1bC5Ue6SgK7_!!6000000003429-2-tps-144-144.png",
+          "pinned": false
+        }
+      ]
+    }
+  ]
+}
