@@ -17,6 +17,7 @@ export const activeDraggedCard = ref<DraggedItemInfo | null>(null)
 export const dragHoverTarget = ref<DragHoverTarget | null>(null)
 export const activeFloatingCard = ref<NavItem | null>(null)
 export const floatingPointer = ref({ x: 0, y: 0 })
+export const activeReorderCategoryId = ref<string | null>(null)
 
 export function setDraggedCard(info: DraggedItemInfo | null) {
   activeDraggedCard.value = info
@@ -43,8 +44,13 @@ export function updateFloatingPointer(x: number, y: number) {
   floatingPointer.value = { x, y }
 }
 
+export function setActiveReorderCategory(categoryId: string | null) {
+  activeReorderCategoryId.value = categoryId
+}
+
 export function clearDragState() {
   activeDraggedCard.value = null
   dragHoverTarget.value = null
   activeFloatingCard.value = null
+  activeReorderCategoryId.value = null
 }

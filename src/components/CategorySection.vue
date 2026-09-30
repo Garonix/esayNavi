@@ -19,6 +19,7 @@ import {
   getDragHoverTarget,
   setFloatingCard,
   updateFloatingPointer,
+  activeReorderCategoryId,
   clearDragState
 } from '../services/dragState'
 
@@ -49,7 +50,7 @@ const emit = defineEmits<{
   (e: 'dropUrlOnCategory', categoryId: string, url: string): void
   (e: 'editCategory', category: NavCategory): void
   (e: 'deleteCategory', categoryId: string): void
-  (e: 'startReorder', item: NavItem): void
+  (e: 'startReorder', payload: { categoryId: string; item: NavItem }): void
   (e: 'dragStartCard', payload: { categoryId: string; item: NavItem; index: number }): void
   (e: 'dragEndCard'): void
   (e: 'dropCard', payload: { targetCategoryId: string; targetIndex: number }): void
@@ -85,6 +86,29 @@ const updateColumnsCount = () => {
   }
 }
 
+// 方案 C（原地稳定模式）：计算当前分类在换位模式下是否需要保持展开
+// 仅当前被长按的主活动分类、正在拖拽的源分类、跨分类拖入吸附的目标分类展开
+// 上方与其他所有分类严格保持紧凑单排，彻底消除下方卡片被下推位移的根源！
+const shouldExpandInReorderMode = computed(() => {
+  if (!props.isReorderMode) return false
+
+  // 1. 鼠标当前正停留在本分类区域内
+  if (isMouseInside.value || isHovered.value) return true
+
+  // 2. 本分类是长按起步的主活动分类
+  if (activeReorderCategoryId.value && activeReorderCategoryId.value === props.category.id) return true
+
+  // 3. 本分类是当前正在拖拽的源分类
+  const drag = activeDraggedCard.value
+  if (drag && drag.categoryId === props.category.id) return true
+
+  // 4. 本分类是当前拖拽悬停的目标分类（跨分类拖入智能吸附）
+  const hover = dragHoverTarget.value
+  if (hover && hover.categoryId === props.category.id) return true
+
+  return false
+})
+
 // 物理高度连续插值
 const updateReelHeight = () => {
   if (isCollapsed.value && !props.isReorderMode) {
@@ -93,9 +117,13 @@ const updateReelHeight = () => {
   }
   const el = reelGridRef.value?.$el || reelGridRef.value
   if (props.isReorderMode) {
-    // 调整模式下：全局展开，露出全部卡片以便跨分类与全局拖拽
-    if (el) {
-      currentHeight.value = `${el.scrollHeight + 6}px`
+    // 方案 C 原地稳定：仅展开活动分类，非活动分类严格维持单排高度（98px），零推搡！
+    if (shouldExpandInReorderMode.value) {
+      if (el) {
+        currentHeight.value = `${el.scrollHeight + 6}px`
+      }
+    } else {
+      currentHeight.value = `${SINGLE_ROW_HEIGHT}px`
     }
     return
   }
@@ -111,12 +139,30 @@ const updateReelHeight = () => {
 
 watch(() => props.isReorderMode, (reordering) => {
   if (reordering) {
-    isHovered.value = true
-    isRevealed.value = true
+    if (shouldExpandInReorderMode.value) {
+      isHovered.value = true
+      isRevealed.value = true
+    } else {
+      isHovered.value = false
+      isRevealed.value = false
+    }
     nextTick(updateReelHeight)
   } else {
     isHovered.value = false
     isRevealed.value = false
+    nextTick(updateReelHeight)
+  }
+})
+
+watch(shouldExpandInReorderMode, (expanded) => {
+  if (props.isReorderMode) {
+    if (expanded) {
+      isHovered.value = true
+      isRevealed.value = true
+    } else {
+      isHovered.value = false
+      isRevealed.value = false
+    }
     nextTick(updateReelHeight)
   }
 })
@@ -214,8 +260,8 @@ watch(() => props.isAnyContextMenuActive, (isAnyActive) => {
 
 // 纯向下展开的波浪级联样式算法
 const getCardWaveStyle = (index: number): CSSProperties => {
-  // 调整模式下：返回空样式，绝对不内联任何 transform/transition，完全交给 Vue TransitionGroup 的原生 FLIP
-  if (props.isReorderMode) {
+  // 调整模式下：若是展开的活动分类，返回空样式，完全交给 Vue TransitionGroup 的原生 FLIP
+  if (props.isReorderMode && shouldExpandInReorderMode.value) {
     return {}
   }
 
@@ -642,7 +688,7 @@ const getCategoryIcon = (iconName?: string) => {
             :is-reordering="isReorderMode"
             @click-item="$emit('clickItem', $event)"
             @open-context-menu="$emit('openContextMenu', { ...$event, categoryId: category.id })"
-            @start-reorder="$emit('startReorder', $event)"
+            @start-reorder="$emit('startReorder', { categoryId: category.id, item: $event })"
           />
         </div>
 

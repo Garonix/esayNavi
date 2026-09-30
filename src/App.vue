@@ -26,7 +26,8 @@ import {
   clearDragState,
   activeFloatingCard,
   floatingPointer,
-  updateFloatingPointer
+  updateFloatingPointer,
+  setActiveReorderCategory
 } from './services/dragState'
 
 const config = ref<NavConfig>({ ...DEFAULT_CONFIG })
@@ -289,13 +290,26 @@ const draggedCardInfo = ref<{
   index: number
 } | null>(null)
 
-const handleStartReorder = (_item?: NavItem) => {
+const handleStartReorder = (payload?: { categoryId: string; item: NavItem } | NavItem) => {
   clearDragState()
   draggedCardInfo.value = null
   isReorderMode.value = true
   if (contextMenuState.value.show) {
     handleCloseContextMenu()
   }
+
+  // 记录长按起步的主活动分类 ID（原地稳定模式核心：非活动分类绝不擅自膨胀，彻底消灭下方卡片被推搡位移的根源）
+  let targetCatId: string | null = null
+  if (payload && 'categoryId' in payload) {
+    targetCatId = payload.categoryId
+  } else if (payload && 'id' in payload) {
+    const found = config.value.categories.find(c => c.items.some(i => i.id === payload.id))
+    targetCatId = found?.id || null
+  } else if (contextMenuState.value.categoryId) {
+    targetCatId = contextMenuState.value.categoryId
+  }
+
+  setActiveReorderCategory(targetCatId)
   showToast('调整模式')
 }
 
