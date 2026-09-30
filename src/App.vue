@@ -95,9 +95,59 @@ const floatingCardStyle = computed(() => {
   }
 })
 
+// 拖拽阶段视口自动滚屏与滚轮滑动引擎
+let autoScrollRafId: number | null = null
+let currentScrollSpeed = 0
+const EDGE_THRESHOLD = 96
+const MAX_SCROLL_SPEED = 18
+
+const stepAutoScroll = () => {
+  if (!isReorderMode.value || !activeFloatingCard.value || currentScrollSpeed === 0) {
+    if (autoScrollRafId) {
+      cancelAnimationFrame(autoScrollRafId)
+      autoScrollRafId = null
+    }
+    return
+  }
+  window.scrollBy(0, currentScrollSpeed)
+  autoScrollRafId = requestAnimationFrame(stepAutoScroll)
+}
+
+const stopAutoScroll = () => {
+  currentScrollSpeed = 0
+  if (autoScrollRafId) {
+    cancelAnimationFrame(autoScrollRafId)
+    autoScrollRafId = null
+  }
+}
+
+const handleGlobalWheel = (e: WheelEvent) => {
+  // 拖拽阶段用户滑动滚轮或触控板双指时，保证视口顺畅滚动
+  if (isReorderMode.value && activeFloatingCard.value) {
+    window.scrollBy({ top: e.deltaY, behavior: 'instant' })
+  }
+}
+
 const handleGlobalDragOver = (e: DragEvent) => {
   if (isReorderMode.value && activeFloatingCard.value && e.clientX && e.clientY) {
     updateFloatingPointer(e.clientX, e.clientY)
+
+    // 视口边缘自动滚屏动力学检测（靠近顶部向上滚，靠近底部向下滚，速度随边缘距离渐进加速）
+    const clientY = e.clientY
+    const winH = window.innerHeight
+    if (clientY < EDGE_THRESHOLD) {
+      const intensity = (EDGE_THRESHOLD - Math.max(0, clientY)) / EDGE_THRESHOLD
+      currentScrollSpeed = -Math.round(intensity * MAX_SCROLL_SPEED)
+    } else if (clientY > winH - EDGE_THRESHOLD) {
+      const intensity = (Math.min(winH, clientY) - (winH - EDGE_THRESHOLD)) / EDGE_THRESHOLD
+      currentScrollSpeed = Math.round(intensity * MAX_SCROLL_SPEED)
+    } else {
+      currentScrollSpeed = 0
+    }
+
+    if (currentScrollSpeed !== 0 && !autoScrollRafId) {
+      autoScrollRafId = requestAnimationFrame(stepAutoScroll)
+    }
   }
 }
 
@@ -106,11 +156,16 @@ onMounted(async () => {
   isLoaded.value = true
   window.addEventListener('keydown', handleGlobalKeydown)
   window.addEventListener('dragover', handleGlobalDragOver, { passive: true })
+  window.addEventListener('wheel', handleGlobalWheel, { passive: true })
+  window.addEventListener('dragend', stopAutoScroll)
 })
 
 onUnmounted(() => {
+  stopAutoScroll()
   window.removeEventListener('keydown', handleGlobalKeydown)
   window.removeEventListener('dragover', handleGlobalDragOver)
+  window.removeEventListener('wheel', handleGlobalWheel)
+  window.removeEventListener('dragend', stopAutoScroll)
 })
 
 const isZenMode = ref(false)
@@ -315,6 +370,7 @@ const handleStartReorder = (payload?: { categoryId: string; item: NavItem } | Na
 
 watch(isReorderMode, (val) => {
   if (!val) {
+    stopAutoScroll()
     clearDragState()
     draggedCardInfo.value = null
   }
@@ -325,10 +381,12 @@ const handleDragStartCard = (payload: { categoryId: string; item: NavItem; index
 }
 
 const handleDragEndCard = () => {
+  stopAutoScroll()
   draggedCardInfo.value = null
 }
 
 const handleDropCard = ({ targetCategoryId, targetIndex }: { targetCategoryId: string; targetIndex: number }) => {
+  stopAutoScroll()
   const currentDrag = getDraggedCard() || draggedCardInfo.value
   if (!currentDrag) return
 
