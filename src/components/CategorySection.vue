@@ -362,186 +362,226 @@ const displayCards = computed<DisplayCard[]>(() => {
   }))
 })
 
-// 拖拽物理动力学与滞回状态
+// Pointer 拖拽物理动力学与滞回状态
 let dragStartPointerX = 0
 let dragStartPointerY = 0
+let lastPointerX = 0
+let lastPointerY = 0
 let isDragDeadzoneExceeded = false
+let isPointerDragging = false
 let lastReorderTime = 0
+let activePointerItem: NavItem | null = null
+let activePointerIndex = 0
 
-// 1x1 纯透明图片单例（用于彻底隐蔽操作系统层级错位且延迟的原生 DragImage）
-let transparentDragImage: HTMLImageElement | null = null
+// 全局光标追踪（支持普通模式长按直接起拖）
+let lastKnownPointerX = 0
+let lastKnownPointerY = 0
 if (typeof window !== 'undefined') {
-  transparentDragImage = new Image()
-  transparentDragImage.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+  window.addEventListener('pointerdown', (e) => {
+    lastKnownPointerX = e.clientX
+    lastKnownPointerY = e.clientY
+  }, { passive: true, capture: true })
+  window.addEventListener('pointermove', (e) => {
+    lastKnownPointerX = e.clientX
+    lastKnownPointerY = e.clientY
+  }, { passive: true, capture: true })
 }
 
-// 图标位置调整拖拽事件处理
-const handleCardDragStart = (e: DragEvent, item: NavItem, index: number) => {
-  if (!props.isReorderMode) return
+// 指针按下处理
+const handleCardPointerDown = (e: PointerEvent, item: NavItem, index: number, isGhost: boolean) => {
+  if (!props.isReorderMode || isGhost) return
+  if (e.button !== 0) return // 仅限鼠标左键或主触控点
 
-  dragStartPointerX = e.clientX || 0
-  dragStartPointerY = e.clientY || 0
+  e.preventDefault()
+
+  dragStartPointerX = e.clientX
+  dragStartPointerY = e.clientY
+  lastPointerX = e.clientX
+  lastPointerY = e.clientY
   isDragDeadzoneExceeded = false
+  isPointerDragging = false
   lastReorderTime = Date.now()
+  activePointerItem = item
+  activePointerIndex = index
 
-  // 1. 激活纯前端超丝滑、零延迟、绝对跟手的高清浮动虚影（彻底根除 Linux/高 DPI 下原生 setDragImage 偏右一个图标宽度的顽疾）
-  setFloatingCard(item, e.clientX || 0, e.clientY || 0)
+  window.addEventListener('pointermove', onGlobalPointerMove, { passive: false })
+  window.addEventListener('pointerup', onGlobalPointerUp)
+  window.addEventListener('pointercancel', onGlobalPointerUp)
+  window.addEventListener('scroll', onGlobalScroll, { passive: true })
+}
 
-  if (e.dataTransfer) {
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', item.id)
-    // 2. 将错位且模糊的原生操作系统拖拽图层替换为 1x1 透明图片，彻底隐蔽
-    try {
-      if (transparentDragImage) {
-        e.dataTransfer.setDragImage(transparentDragImage, 0, 0)
-      }
-    } catch {
-      // 兼容兜底
+// 长按进入换位模式时如果用户手未松开，直接无缝衔接起拖
+const handleCardStartReorder = (item: NavItem, index: number) => {
+  emit('startReorder', { categoryId: props.category.id, item })
+
+  dragStartPointerX = lastKnownPointerX
+  dragStartPointerY = lastKnownPointerY
+  lastPointerX = lastKnownPointerX
+  lastPointerY = lastKnownPointerY
+  isDragDeadzoneExceeded = false
+  isPointerDragging = false
+  lastReorderTime = Date.now()
+  activePointerItem = item
+  activePointerIndex = index
+
+  window.addEventListener('pointermove', onGlobalPointerMove, { passive: false })
+  window.addEventListener('pointerup', onGlobalPointerUp)
+  window.addEventListener('pointercancel', onGlobalPointerUp)
+  window.addEventListener('scroll', onGlobalScroll, { passive: true })
+}
+
+const onGlobalPointerMove = (e: PointerEvent) => {
+  lastPointerX = e.clientX
+  lastPointerY = e.clientY
+
+  // 1. 突破 6px 起拖死区（区分微动误触与真实拖拽）
+  if (!isPointerDragging) {
+    const dist = Math.hypot(e.clientX - dragStartPointerX, e.clientY - dragStartPointerY)
+    if (dist < 6) return
+
+    isPointerDragging = true
+
+    // 激活高清浮动虚影（中心对准指针，120FPS 硬件加速）
+    if (activePointerItem) {
+      setFloatingCard(activePointerItem, e.clientX, e.clientY)
+      setDraggedCard({ categoryId: props.category.id, item: activePointerItem, index: activePointerIndex })
+      setDragHoverTarget({ categoryId: props.category.id, index: activePointerIndex })
+      emit('dragStartCard', { categoryId: props.category.id, item: activePointerItem, index: activePointerIndex })
     }
   }
 
-  // 3. 延迟一帧（setTimeout 0）更新全局响应式状态！
-  // 必须等待浏览器完全捕获并锁定了拖拽事件之后，原位卡片才转化为半透明占位凹槽！
-  setTimeout(() => {
-    setDraggedCard({ categoryId: props.category.id, item, index })
-    setDragHoverTarget({ categoryId: props.category.id, index })
-    emit('dragStartCard', { categoryId: props.category.id, item, index })
-  }, 0)
+  // 2. 拖拽激活中：实时跟手更新浮层与命中碰撞测试
+  if (isPointerDragging) {
+    updateFloatingPointer(e.clientX, e.clientY)
+    performHitTest(e.clientX, e.clientY)
+  }
 }
 
-const handleCardDragEnd = () => {
-  isDragDeadzoneExceeded = false
-  setFloatingCard(null)
-  clearDragState()
-  emit('dragEndCard')
+// 用户滑动滚轮或页面发生滚动时，卡片凹槽随滚动动态吸附
+const onGlobalScroll = () => {
+  if (isPointerDragging) {
+    performHitTest(lastPointerX, lastPointerY)
+  }
 }
 
-const handleCardDragOver = (e: DragEvent, card: DisplayCard) => {
+// 核心命中测试与 40% / 60% 物理滞回算法
+const performHitTest = (clientX: number, clientY: number) => {
   const currentDrag = getDraggedCard()
   if (!currentDrag || !props.isReorderMode) return
-  e.preventDefault()
-  e.stopPropagation()
-  if (e.dataTransfer) {
-    e.dataTransfer.dropEffect = 'move'
-  }
 
-  // 实时跟手更新浮动卡片坐标
-  if (e.clientX && e.clientY) {
-    updateFloatingPointer(e.clientX, e.clientY)
-  }
-
-  // 1. 若悬停在占位凹槽本身，绝对锁定当前坑位，拦截冒泡，避免上下抖动
-  if (card.isGhost) return
-
-  // 2. 起拖死区保护：在鼠标位移未超过 18px 之前，严禁挤占任何卡片，死死锁定原位！
-  // 彻底根除“刚进入换位模式时下一次拖动必定偏移”的微动误判 BUG
+  // 起拖死区保护：在鼠标位移未超过 18px 之前，严禁挤占任何卡片，死死锁定原位
   if (!isDragDeadzoneExceeded) {
-    const dist = Math.hypot(e.clientX - dragStartPointerX, e.clientY - dragStartPointerY)
-    if (dist < 18) {
-      return
-    }
+    const dist = Math.hypot(clientX - dragStartPointerX, clientY - dragStartPointerY)
+    if (dist < 18) return
     isDragDeadzoneExceeded = true
   }
 
-  // 3. 防抖冷却锁：若刚刚发生过挤占换位（160ms 内），等待 FLIP 平滑过渡，禁止高频来回抽搐
+  // 防抖冷却锁：若刚刚发生过挤占换位（140ms 内），等待 FLIP 平滑过渡
   const now = Date.now()
-  if (now - lastReorderTime < 160) {
-    return
-  }
+  if (now - lastReorderTime < 140) return
 
-  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-  if (rect.width <= 0) return
-  const mouseX = e.clientX - rect.left
-  const ratio = mouseX / rect.width
+  // 穿透检测正下方元素（由于浮动虚影设置了 pointer-events-none，直接击中底层内容）
+  const hitElement = document.elementFromPoint(clientX, clientY)
+  if (!hitElement) return
 
-  const nonGhostCards = displayCards.value.filter(c => !c.isGhost)
-  const targetItemIndex = nonGhostCards.findIndex(c => c.id === card.id)
-  if (targetItemIndex === -1) return
+  // 1. 优先检测是否悬停在具体卡片上
+  const cardEl = hitElement.closest('[data-reorder-card]') as HTMLElement | null
+  if (cardEl) {
+    const isGhost = cardEl.getAttribute('data-is-ghost') === 'true'
+    // 若悬停在占位凹槽本身，绝对锁定当前坑位，避免左右抖动
+    if (isGhost) return
 
-  // 4. 物理滞回算法（40% / 60% 深度穿透阈值，中间 20% 为死区 Deadband）
-  // 深入目标卡片超过 62% 才向右后插，深入目标卡片前 38% 才向左前插，彻底消除反复跳动
-  let targetIndex: number
-  if (ratio > 0.62) {
-    targetIndex = targetItemIndex + 1
-  } else if (ratio < 0.38) {
-    targetIndex = targetItemIndex
-  } else {
-    // 落在 38% ~ 62% 滞回稳定区内，保持当前坑位，避免左右反复弹跳！
-    return
-  }
+    const targetCatId = cardEl.getAttribute('data-category-id')
+    const targetCardId = cardEl.getAttribute('data-reorder-card')
+    if (!targetCatId || !targetCardId) return
 
-  const currentHover = getDragHoverTarget()
-  if (!currentHover || currentHover.categoryId !== props.category.id || currentHover.index !== targetIndex) {
-    lastReorderTime = now
-    setDragHoverTarget({
-      categoryId: props.category.id,
-      index: targetIndex
-    })
-  }
-}
+    const rect = cardEl.getBoundingClientRect()
+    if (rect.width <= 0) return
+    const mouseX = clientX - rect.left
+    const ratio = mouseX / rect.width
 
-const handleCardDrop = (e: DragEvent) => {
-  const currentDrag = getDraggedCard()
-  if (!currentDrag || !props.isReorderMode) return
-  e.preventDefault()
-  e.stopPropagation()
+    // 找到目标分类 Section 内的所有有效卡片
+    const sectionEl = cardEl.closest('[data-category-section-id]')
+    if (!sectionEl) return
+    const nonGhostCardEls = Array.from(sectionEl.querySelectorAll('[data-reorder-card]:not([data-is-ghost="true"])'))
+    const targetItemIndex = nonGhostCardEls.findIndex(el => el.getAttribute('data-reorder-card') === targetCardId)
+    if (targetItemIndex === -1) return
 
-  const currentHover = getDragHoverTarget()
-  let finalTargetIndex = displayCards.value.length
-  if (currentHover && currentHover.categoryId === props.category.id) {
-    finalTargetIndex = currentHover.index
-  }
-
-  setFloatingCard(null)
-  emit('dropCard', {
-    targetCategoryId: props.category.id,
-    targetIndex: finalTargetIndex
-  })
-  clearDragState()
-}
-
-const handleSectionDragOver = (e: DragEvent) => {
-  const currentDrag = getDraggedCard()
-  if (currentDrag && props.isReorderMode) {
-    e.preventDefault()
-    if (e.dataTransfer) {
-      e.dataTransfer.dropEffect = 'move'
-    }
-
-    // 若当前分类已有有效的悬停目标，绝对不要被外层容器的欧氏距离盲目改写
-    const currentHover = getDragHoverTarget()
-    if (currentHover && currentHover.categoryId === props.category.id) {
+    // 40% / 60% 物理滞回算法
+    let targetIndex: number
+    if (ratio > 0.62) {
+      targetIndex = targetItemIndex + 1
+    } else if (ratio < 0.38) {
+      targetIndex = targetItemIndex
+    } else {
+      // 落在滞回死区内，保持现状
       return
     }
 
-    // 跨分类拖入本分类且尚未击中任何具体卡片时的平滑吸附兜底
-    const nonGhostCards = displayCards.value.filter(c => !c.isGhost)
+    const currentHover = getDragHoverTarget()
+    if (!currentHover || currentHover.categoryId !== targetCatId || currentHover.index !== targetIndex) {
+      lastReorderTime = now
+      setDragHoverTarget({
+        categoryId: targetCatId,
+        index: targetIndex
+      })
+    }
+    return
+  }
+
+  // 2. 检测是否悬停在某个分类区域（Section）内（吸附到该分类末尾）
+  const sectionEl = hitElement.closest('[data-category-section-id]') as HTMLElement | null
+  if (sectionEl) {
+    const targetCatId = sectionEl.getAttribute('data-category-section-id')
+    if (!targetCatId) return
+
+    const currentHover = getDragHoverTarget()
+    if (currentHover && currentHover.categoryId === targetCatId) return
+
+    const nonGhostCardEls = Array.from(sectionEl.querySelectorAll('[data-reorder-card]:not([data-is-ghost="true"])'))
+    lastReorderTime = now
     setDragHoverTarget({
-      categoryId: props.category.id,
-      index: nonGhostCards.length
+      categoryId: targetCatId,
+      index: nonGhostCardEls.length
     })
-  } else {
-    handleDragOver(e)
   }
 }
 
-const handleSectionDrop = (e: DragEvent) => {
-  const currentDrag = getDraggedCard()
-  if (currentDrag && props.isReorderMode) {
-    e.preventDefault()
-    e.stopPropagation()
+const onGlobalPointerUp = () => {
+  window.removeEventListener('pointermove', onGlobalPointerMove)
+  window.removeEventListener('pointerup', onGlobalPointerUp)
+  window.removeEventListener('pointercancel', onGlobalPointerUp)
+  window.removeEventListener('scroll', onGlobalScroll)
+
+  if (isPointerDragging) {
     const currentHover = getDragHoverTarget()
-    let finalTargetIndex = props.category.items.length
-    if (currentHover && currentHover.categoryId === props.category.id) {
-      finalTargetIndex = currentHover.index
+    const currentDrag = getDraggedCard()
+
+    if (currentHover && currentDrag) {
+      emit('dropCard', {
+        targetCategoryId: currentHover.categoryId,
+        targetIndex: currentHover.index
+      })
     }
-    emit('dropCard', {
-      targetCategoryId: props.category.id,
-      targetIndex: finalTargetIndex
-    })
+
+    setFloatingCard(null)
     clearDragState()
-    return
+    emit('dragEndCard')
   }
+
+  isPointerDragging = false
+  isDragDeadzoneExceeded = false
+  activePointerItem = null
+}
+
+// 外部 URL 拖入分类的处理 (非换位模式)
+const handleSectionDragOver = (e: DragEvent) => {
+  if (props.isReorderMode) return
+  handleDragOver(e)
+}
+
+const handleSectionDrop = (e: DragEvent) => {
+  if (props.isReorderMode) return
   handleDrop(e)
 }
 
@@ -565,6 +605,10 @@ onMounted(() => {
 onUnmounted(() => {
   if (revealTimer) clearTimeout(revealTimer)
   if (collapseTimer) clearTimeout(collapseTimer)
+  window.removeEventListener('pointermove', onGlobalPointerMove)
+  window.removeEventListener('pointerup', onGlobalPointerUp)
+  window.removeEventListener('pointercancel', onGlobalPointerUp)
+  window.removeEventListener('scroll', onGlobalScroll)
 })
 
 const handleDragOver = (e: DragEvent) => {
@@ -609,6 +653,7 @@ const getCategoryIcon = (iconName?: string) => {
       isDragOver ? 'bg-blue-50/70 ring-2 ring-blue-400 ring-dashed shadow-md' : 'hover:bg-slate-50/50',
       isReorderMode ? 'bg-slate-50/60 ring-1 ring-slate-200/60' : ''
     ]"
+    :data-category-section-id="category.id"
     @dragover="handleSectionDragOver"
     @dragleave="handleDragLeave"
     @drop="handleSectionDrop"
@@ -646,13 +691,13 @@ const getCategoryIcon = (iconName?: string) => {
         <div
           v-for="(card, idx) in displayCards"
           :key="card.id"
-          class="wave-card-wrapper relative"
+          class="wave-card-wrapper relative select-none"
           :style="getCardWaveStyle(idx)"
-          :draggable="isReorderMode && !card.isGhost"
-          @dragstart="handleCardDragStart($event, card.item, idx)"
-          @dragend="handleCardDragEnd"
-          @dragover="handleCardDragOver($event, card)"
-          @drop="handleCardDrop($event)"
+          :data-reorder-card="card.item.id"
+          :data-category-id="category.id"
+          :data-card-index="idx"
+          :data-is-ghost="card.isGhost ? 'true' : 'false'"
+          @pointerdown="handleCardPointerDown($event, card.item, idx, card.isGhost)"
         >
           <!-- 高质感半透明虚线凹槽占位符 (Ghost Slot - 纯净物理隐喻，零说教) -->
           <div
@@ -688,7 +733,7 @@ const getCategoryIcon = (iconName?: string) => {
             :is-reordering="isReorderMode"
             @click-item="$emit('clickItem', $event)"
             @open-context-menu="$emit('openContextMenu', { ...$event, categoryId: category.id })"
-            @start-reorder="$emit('startReorder', { categoryId: category.id, item: $event })"
+            @start-reorder="handleCardStartReorder($event, idx)"
           />
         </div>
 

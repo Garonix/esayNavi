@@ -124,30 +124,38 @@ const stopAutoScroll = () => {
 const handleGlobalWheel = (e: WheelEvent) => {
   // 拖拽阶段用户滑动滚轮或触控板双指时，保证视口顺畅滚动
   if (isReorderMode.value && activeFloatingCard.value) {
+    // 原生滚轮在 Pointer 模式下完全通畅，提供即时响应保障
     window.scrollBy({ top: e.deltaY, behavior: 'instant' })
+  }
+}
+
+const checkEdgeAutoScroll = (clientY: number) => {
+  const winH = window.innerHeight
+  if (clientY < EDGE_THRESHOLD) {
+    const intensity = (EDGE_THRESHOLD - Math.max(0, clientY)) / EDGE_THRESHOLD
+    currentScrollSpeed = -Math.round(intensity * MAX_SCROLL_SPEED)
+  } else if (clientY > winH - EDGE_THRESHOLD) {
+    const intensity = (Math.min(winH, clientY) - (winH - EDGE_THRESHOLD)) / EDGE_THRESHOLD
+    currentScrollSpeed = Math.round(intensity * MAX_SCROLL_SPEED)
+  } else {
+    currentScrollSpeed = 0
+  }
+
+  if (currentScrollSpeed !== 0 && !autoScrollRafId) {
+    autoScrollRafId = requestAnimationFrame(stepAutoScroll)
+  }
+}
+
+const handleGlobalPointerMove = (e: PointerEvent) => {
+  if (isReorderMode.value && activeFloatingCard.value) {
+    checkEdgeAutoScroll(e.clientY)
   }
 }
 
 const handleGlobalDragOver = (e: DragEvent) => {
   if (isReorderMode.value && activeFloatingCard.value && e.clientX && e.clientY) {
     updateFloatingPointer(e.clientX, e.clientY)
-
-    // 视口边缘自动滚屏动力学检测（靠近顶部向上滚，靠近底部向下滚，速度随边缘距离渐进加速）
-    const clientY = e.clientY
-    const winH = window.innerHeight
-    if (clientY < EDGE_THRESHOLD) {
-      const intensity = (EDGE_THRESHOLD - Math.max(0, clientY)) / EDGE_THRESHOLD
-      currentScrollSpeed = -Math.round(intensity * MAX_SCROLL_SPEED)
-    } else if (clientY > winH - EDGE_THRESHOLD) {
-      const intensity = (Math.min(winH, clientY) - (winH - EDGE_THRESHOLD)) / EDGE_THRESHOLD
-      currentScrollSpeed = Math.round(intensity * MAX_SCROLL_SPEED)
-    } else {
-      currentScrollSpeed = 0
-    }
-
-    if (currentScrollSpeed !== 0 && !autoScrollRafId) {
-      autoScrollRafId = requestAnimationFrame(stepAutoScroll)
-    }
+    checkEdgeAutoScroll(e.clientY)
   }
 }
 
@@ -155,6 +163,8 @@ onMounted(async () => {
   config.value = await loadInitialConfig()
   isLoaded.value = true
   window.addEventListener('keydown', handleGlobalKeydown)
+  window.addEventListener('pointermove', handleGlobalPointerMove, { passive: true })
+  window.addEventListener('pointerup', stopAutoScroll)
   window.addEventListener('dragover', handleGlobalDragOver, { passive: true })
   window.addEventListener('wheel', handleGlobalWheel, { passive: true })
   window.addEventListener('dragend', stopAutoScroll)
@@ -163,6 +173,8 @@ onMounted(async () => {
 onUnmounted(() => {
   stopAutoScroll()
   window.removeEventListener('keydown', handleGlobalKeydown)
+  window.removeEventListener('pointermove', handleGlobalPointerMove)
+  window.removeEventListener('pointerup', stopAutoScroll)
   window.removeEventListener('dragover', handleGlobalDragOver)
   window.removeEventListener('wheel', handleGlobalWheel)
   window.removeEventListener('dragend', stopAutoScroll)
