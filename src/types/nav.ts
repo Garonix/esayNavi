@@ -8,6 +8,7 @@ export interface NavItem {
   pinned?: boolean
   createdAt?: number
   clickCount?: number
+  internalUrl?: string
 }
 
 export interface NavCategory {
@@ -28,15 +29,27 @@ export interface BackgroundConfig {
   parallax: boolean // 视差滚动
 }
 
+export interface WebDavConfig {
+  enabled: boolean
+  url: string
+  username: string
+  password?: string
+  filename?: string
+  autoSync?: boolean
+}
+
 export interface NavSettings {
   title: string
   theme: 'dark' | 'light' | 'auto'
-  background: 'white' | 'mesh' | 'aurora' | 'minimal' | 'glass'
+  background: BackgroundType
   customBackground?: BackgroundConfig
   searchEngine: 'google' | 'bing' | 'baidu' | 'duckduckgo' | 'github'
   openInNewTab: boolean
   showClock: boolean
   showSearch: boolean
+  showFrequentBar?: boolean // 智能常用置顶流
+  enableHealthCheck?: boolean // 自建服务存活探针
+  webdav?: WebDavConfig
 }
 
 export interface NavConfig {

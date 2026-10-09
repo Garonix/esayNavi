@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { FolderPlus, Search, HelpCircle, CheckCircle2, Settings, Check } from 'lucide-vue-next'
+import { FolderPlus, Search, HelpCircle, CheckCircle2, Settings, Check, Zap } from 'lucide-vue-next'
 import type { NavConfig, NavCategory, NavItem, NavSettings } from './types/nav'
 import { 
   loadInitialConfig, 
@@ -12,8 +12,11 @@ import {
   DEFAULT_CONFIG 
 } from './services/storage'
 import { extractSiteTitle, getFaviconUrl, normalizeUrl } from './utils/urlHelper'
+import { matchPinyinQuery } from './utils/pinyinHelper'
 import { resolveSiteFavicon } from './services/faviconFetcher'
 import { saveCachedIcon } from './services/iconCache'
+import { pushToWebDav } from './services/webdav'
+import { healthStatusMap, runHealthCheckForAll } from './services/healthChecker'
 
 import Header from './components/Header.vue'
 import CategorySection from './components/CategorySection.vue'
@@ -72,6 +75,8 @@ const showToast = (msg: string) => {
   }, 1800)
 }
 
+let webdavAutoSyncTimer: number | null = null
+
 const persistChanges = async () => {
   saveConfigToLocal(config.value)
   if (linkedFileName.value) {
@@ -79,6 +84,18 @@ const persistChanges = async () => {
     if (success) {
       showToast('已写回')
     }
+  }
+
+  // WebDAV 自动增量写回云端
+  if (config.value.settings.webdav?.enabled && config.value.settings.webdav?.autoSync) {
+    if (webdavAutoSyncTimer) clearTimeout(webdavAutoSyncTimer)
+    webdavAutoSyncTimer = window.setTimeout(async () => {
+      try {
+        await pushToWebDav(config.value.settings.webdav!, config.value)
+      } catch {
+        // 静默处理，避免干扰普通交互
+      }
+    }, 1500)
   }
 }
 
@@ -161,9 +178,45 @@ const handleGlobalDragOver = (e: DragEvent) => {
   }
 }
 
+const triggerHealthCheck = () => {
+  if (config.value.categories.length > 0) {
+    runHealthCheckForAll(config.value.categories)
+    showToast('正在探测服务')
+  }
+}
+
+// 高频常用推荐流 (基于真实点击量加权提炼)
+const frequentItems = computed<NavItem[]>(() => {
+  if (!config.value.settings.showFrequentBar || searchQuery.value.trim()) return []
+  const all: NavItem[] = []
+  for (const cat of config.value.categories) {
+    for (const item of cat.items) {
+      if ((item.clickCount || 0) > 0) {
+        all.push(item)
+      }
+    }
+  }
+  return all.sort((a, b) => (b.clickCount || 0) - (a.clickCount || 0)).slice(0, 8)
+})
+
+const handleUpdateFullConfig = (newConfig: NavConfig) => {
+  config.value = newConfig
+  persistChanges()
+  showToast('云端配置已载入')
+}
+
+watch(() => config.value.settings.enableHealthCheck, (enabled) => {
+  if (enabled) {
+    triggerHealthCheck()
+  }
+})
+
 onMounted(async () => {
   config.value = await loadInitialConfig()
   isLoaded.value = true
+  if (config.value.settings.enableHealthCheck) {
+    setTimeout(triggerHealthCheck, 800)
+  }
   window.addEventListener('keydown', handleGlobalKeydown)
   window.addEventListener('pointermove', handleGlobalPointerMove, { passive: true })
   window.addEventListener('pointerup', stopAutoScroll)
@@ -266,8 +319,7 @@ const filteredCategories = computed(() => {
   return config.value.categories
     .map(cat => {
       const matchedItems = cat.items.filter(item => 
-        item.title.toLowerCase().includes(query) ||
-        item.url.toLowerCase().includes(query)
+        matchPinyinQuery(item.title, item.url, query)
       )
       return {
         ...cat,
@@ -276,6 +328,74 @@ const filteredCategories = computed(() => {
     })
     .filter(cat => cat.items.length > 0)
 })
+
+// 当前过滤状态下的全部卡片扁平列表 (供键盘无缝跨分类网格漫游)
+const flatFilteredCards = computed<NavItem[]>(() => {
+  const list: NavItem[] = []
+  for (const cat of filteredCategories.value) {
+    for (const item of cat.items) {
+      list.push(item)
+    }
+  }
+  return list
+})
+
+// 全键盘游标索引
+const activeKeyboardIndex = ref<number>(-1)
+
+const activeFocusedCard = computed<NavItem | null>(() => {
+  if (
+    activeKeyboardIndex.value >= 0 && 
+    activeKeyboardIndex.value < flatFilteredCards.value.length
+  ) {
+    return flatFilteredCards.value[activeKeyboardIndex.value]
+  }
+  return null
+})
+
+// 搜索文字变化时，若有匹配结果自动激活首张卡片焦点
+watch(searchQuery, (newVal) => {
+  if (newVal.trim() && flatFilteredCards.value.length > 0) {
+    activeKeyboardIndex.value = 0
+  } else {
+    activeKeyboardIndex.value = -1
+  }
+})
+
+const handleNavigateCards = (direction: 'next' | 'prev') => {
+  const total = flatFilteredCards.value.length
+  if (total === 0) return
+
+  if (direction === 'next') {
+    if (activeKeyboardIndex.value === -1) {
+      activeKeyboardIndex.value = 0
+    } else {
+      activeKeyboardIndex.value = (activeKeyboardIndex.value + 1) % total
+    }
+  } else {
+    if (activeKeyboardIndex.value === -1) {
+      activeKeyboardIndex.value = total - 1
+    } else {
+      activeKeyboardIndex.value = (activeKeyboardIndex.value - 1 + total) % total
+    }
+  }
+}
+
+const handleSelectFocusedCard = () => {
+  if (activeFocusedCard.value) {
+    const card = activeFocusedCard.value
+    handleClickItem(card)
+    if (config.value.settings.openInNewTab) {
+      window.open(card.url, '_blank', 'noopener,noreferrer')
+    } else {
+      window.location.href = card.url
+    }
+  }
+}
+
+const handleClearFocus = () => {
+  activeKeyboardIndex.value = -1
+}
 
 const handleSearchSubmit = (query: string, engineBaseUrl: string) => {
   window.open(`${engineBaseUrl}${encodeURIComponent(query)}`, '_blank')
@@ -444,6 +564,14 @@ const handleDropCard = ({ targetCategoryId, targetIndex }: { targetCategoryId: s
 const handleClickItem = (item: NavItem) => {
   item.clickCount = (item.clickCount || 0) + 1
   saveConfigToLocal(config.value)
+}
+
+const openItemDirect = (item: NavItem) => {
+  if (config.value.settings.openInNewTab) {
+    window.open(item.url, '_blank', 'noopener,noreferrer')
+  } else {
+    window.location.href = item.url
+  }
 }
 
 const handleOpenContextMenu = (payload: { item: NavItem; x: number; y: number; categoryId?: string }) => {
@@ -626,11 +754,42 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
         :settings="config.settings"
         :linked-file-name="linkedFileName"
         v-model:search-query="searchQuery"
+        :has-active-card-focus="!!activeFocusedCard"
+        :focused-card-title="activeFocusedCard?.title"
         @submit-search="handleSearchSubmit"
+        @navigate-cards="handleNavigateCards"
+        @select-focused-card="handleSelectFocusedCard"
+        @clear-focus="handleClearFocus"
       />
 
       <!-- 分类站点列表 (左右留白充沛优雅，max-w-4xl 黄金居中) -->
       <main class="relative z-10 w-full max-w-4xl mx-auto px-6 sm:px-12 md:px-16 pb-28">
+        <!-- 高频常用智能推荐流 (点击加权自学习复利) -->
+        <div v-if="frequentItems.length > 0" class="mb-5 px-1 select-none">
+          <div class="flex items-center gap-1.5 mb-2 text-[11px] font-semibold text-slate-400">
+            <Zap class="w-3 h-3 text-amber-500 fill-amber-500/20" />
+            <span>高频常用</span>
+          </div>
+          <div class="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5" style="scrollbar-width: none;">
+            <div
+              v-for="item in frequentItems"
+              :key="'freq-' + item.id"
+              @click="handleClickItem(item); openItemDirect(item)"
+              class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/90 hover:bg-white border border-slate-200/90 hover:border-blue-400 hover:shadow-xs text-xs font-medium text-slate-700 transition-all cursor-pointer flex-shrink-0 active:scale-95 group shadow-2xs backdrop-blur-md"
+            >
+              <img
+                v-if="item.icon"
+                :src="item.icon"
+                class="w-4 h-4 object-contain group-hover:scale-110 transition-transform pointer-events-none"
+                @error="($event.target as HTMLElement).style.display = 'none'"
+              />
+              <span class="max-w-[80px] truncate text-slate-700 group-hover:text-blue-600 transition-colors">
+                {{ item.title }}
+              </span>
+            </div>
+          </div>
+        </div>
+
         <div v-if="filteredCategories.length > 0">
           <CategorySection
             v-for="cat in filteredCategories"
@@ -641,6 +800,8 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
             :is-any-context-menu-active="contextMenuState.show"
             :is-reorder-mode="isReorderMode"
             :dragged-card="draggedCardInfo"
+            :focused-card-id="activeFocusedCard?.id"
+            :health-status-map="healthStatusMap"
             @click-item="handleClickItem"
             @open-context-menu="handleOpenContextMenu"
             @add-item-to-category="openAddModal"
@@ -743,6 +904,8 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
       :linked-file-name="linkedFileName"
       @close="showSettingsModal = false"
       @update-settings="handleUpdateSettings"
+      @update-full-config="handleUpdateFullConfig"
+      @trigger-health-check="triggerHealthCheck"
       @connect-file="handleConnectFile"
       @sync-file="handleSyncFile"
       @export-file="handleExportFile"

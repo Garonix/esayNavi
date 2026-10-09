@@ -10,12 +10,15 @@ defineEmits<{
 }>()
 
 const shortcuts = [
-  { key: '/', name: '搜索' },
-  { key: 'N', name: '添加' },
-  { key: 'Space', name: '沉浸' },
-  { key: '右键', name: '菜单' },
-  { key: '?', name: '帮助' },
-  { key: 'Esc', name: '关闭' }
+  { key: '/', name: '聚焦搜索' },
+  { key: '↓ / Tab', name: '遍历卡片' },
+  { key: 'Enter', name: '直达选定' },
+  { key: 'g / b / gh', name: 'Bang 直达' },
+  { key: 'N', name: '添加站点' },
+  { key: 'Space', name: '沉浸视窗' },
+  { key: '右键', name: '快捷菜单' },
+  { key: '?', name: '帮助指南' },
+  { key: 'Esc', name: '关闭/取消' }
 ]
 </script>
 

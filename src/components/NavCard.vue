@@ -10,8 +10,12 @@ const props = withDefaults(defineProps<{
   item: NavItem
   openInNewTab: boolean
   isReordering?: boolean
+  isFocused?: boolean
+  healthStatus?: 'healthy' | 'unhealthy' | 'checking' | 'unknown'
 }>(), {
-  isReordering: false
+  isReordering: false,
+  isFocused: false,
+  healthStatus: 'unknown'
 })
 
 const emit = defineEmits<{
@@ -259,10 +263,28 @@ const handleMouseLeave = () => {
     :class="[
       isReordering 
         ? 'cursor-grab active:cursor-grabbing ring-2 ring-blue-500/40 bg-white/95 shadow-md app-jiggle' 
-        : 'cursor-pointer hover:bg-slate-50/50'
+        : isFocused
+          ? 'cursor-pointer ring-2 ring-blue-500 bg-white shadow-lg shadow-blue-500/15 scale-[1.03] z-20'
+          : 'cursor-pointer hover:bg-slate-50/50'
     ]"
     :title="item.title"
   >
+    <!-- 状态探针微标 (零侵入呼吸状态指示) -->
+    <div
+      v-if="healthStatus && healthStatus !== 'unknown'"
+      class="absolute top-2 left-2 z-10 flex items-center gap-1 pointer-events-none"
+    >
+      <span 
+        class="w-1.5 h-1.5 rounded-full transition-colors"
+        :class="{
+          'bg-emerald-500 ring-2 ring-emerald-500/20 animate-pulse': healthStatus === 'healthy',
+          'bg-rose-500 ring-2 ring-rose-500/20': healthStatus === 'unhealthy',
+          'bg-amber-400 animate-pulse': healthStatus === 'checking'
+        }"
+        :title="healthStatus === 'healthy' ? '在线' : healthStatus === 'unhealthy' ? '离线' : '探测中'"
+      ></span>
+    </div>
+
     <!-- 极轻量跟随聚光灯高光 (仅反射光泽，绝不阻断心流) -->
     <div
       v-if="isHovering && !isReordering"

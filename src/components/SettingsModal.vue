@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { 
   X, 
   Download, 
@@ -10,11 +10,17 @@ import {
   Sliders,
   Database,
   Sparkles,
-  RotateCcw
+  RotateCcw,
+  Cloud,
+  Activity,
+  Zap,
+  Loader2,
+  RefreshCw
 } from 'lucide-vue-next'
-import type { NavConfig, NavSettings, BackgroundConfig, BackgroundType } from '../types/nav'
+import type { NavConfig, NavSettings, BackgroundConfig, BackgroundType, WebDavConfig } from '../types/nav'
 import { isFileSystemAccessSupported } from '../services/storage'
 import { saveLocalMedia } from '../services/mediaStorage'
+import { testWebDavConnection, pullFromWebDav, pushToWebDav } from '../services/webdav'
 
 const props = defineProps<{
   show: boolean
@@ -25,16 +31,120 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'updateSettings', settings: Partial<NavSettings>): void
+  (e: 'updateFullConfig', config: NavConfig): void
   (e: 'connectFile'): void
   (e: 'syncFile'): void
   (e: 'exportFile'): void
   (e: 'importFile', file: File): void
   (e: 'resetDefault'): void
+  (e: 'triggerHealthCheck'): void
 }>()
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const mediaInputRef = ref<HTMLInputElement | null>(null)
 const fileApiSupported = isFileSystemAccessSupported()
+
+// WebDAV 表单状态
+const webdavUrl = ref('')
+const webdavUsername = ref('')
+const webdavPassword = ref('')
+const webdavAutoSync = ref(false)
+const isTestingWebdav = ref(false)
+const isPullingWebdav = ref(false)
+const isPushingWebdav = ref(false)
+const webdavFeedback = ref<{ success: boolean; msg: string } | null>(null)
+
+watch(
+  () => props.show,
+  (val) => {
+    if (val) {
+      const wd = props.config.settings.webdav
+      webdavUrl.value = wd?.url || ''
+      webdavUsername.value = wd?.username || ''
+      webdavPassword.value = wd?.password || ''
+      webdavAutoSync.value = wd?.autoSync || false
+      webdavFeedback.value = null
+    }
+  }
+)
+
+const saveWebDavConfig = () => {
+  const newWd: WebDavConfig = {
+    enabled: !!webdavUrl.value.trim(),
+    url: webdavUrl.value.trim(),
+    username: webdavUsername.value.trim(),
+    password: webdavPassword.value,
+    filename: 'nav.json',
+    autoSync: webdavAutoSync.value
+  }
+  emit('updateSettings', { webdav: newWd })
+}
+
+const handleTestWebDav = async () => {
+  if (!webdavUrl.value.trim()) {
+    webdavFeedback.value = { success: false, msg: '请输入 WebDAV 服务器地址' }
+    return
+  }
+  isTestingWebdav.value = true
+  webdavFeedback.value = null
+  const tempConfig: WebDavConfig = {
+    enabled: true,
+    url: webdavUrl.value.trim(),
+    username: webdavUsername.value.trim(),
+    password: webdavPassword.value,
+    filename: 'nav.json'
+  }
+  const res = await testWebDavConnection(tempConfig)
+  webdavFeedback.value = { success: res.success, msg: res.message }
+  isTestingWebdav.value = false
+  if (res.success) {
+    saveWebDavConfig()
+  }
+}
+
+const handlePullWebDav = async () => {
+  if (!webdavUrl.value.trim()) return
+  try {
+    isPullingWebdav.value = true
+    webdavFeedback.value = null
+    const tempConfig: WebDavConfig = {
+      enabled: true,
+      url: webdavUrl.value.trim(),
+      username: webdavUsername.value.trim(),
+      password: webdavPassword.value,
+      filename: 'nav.json'
+    }
+    const remote = await pullFromWebDav(tempConfig)
+    emit('updateFullConfig', remote)
+    webdavFeedback.value = { success: true, msg: '已成功从云端拉取并同步' }
+  } catch (err: any) {
+    webdavFeedback.value = { success: false, msg: err?.message || '拉取失败' }
+  } finally {
+    isPullingWebdav.value = false
+  }
+}
+
+const handlePushWebDav = async () => {
+  if (!webdavUrl.value.trim()) return
+  try {
+    isPushingWebdav.value = true
+    webdavFeedback.value = null
+    const tempConfig: WebDavConfig = {
+      enabled: true,
+      url: webdavUrl.value.trim(),
+      username: webdavUsername.value.trim(),
+      password: webdavPassword.value,
+      filename: 'nav.json'
+    }
+    await pushToWebDav(tempConfig, props.config)
+    saveWebDavConfig()
+    webdavFeedback.value = { success: true, msg: '已成功写回云端' }
+  } catch (err: any) {
+    webdavFeedback.value = { success: false, msg: err?.message || '上传失败' }
+  } finally {
+    isPushingWebdav.value = false
+  }
+}
 
 const handleFileChange = (e: Event) => {
   const target = e.target as HTMLInputElement
@@ -231,12 +341,12 @@ const handleMediaUpload = async (e: Event) => {
             </div>
           </div>
 
-          <!-- 2. 数据 -->
+          <!-- 2. 本地数据与物理文件直连 -->
           <div class="space-y-3 pt-3 border-t border-slate-100">
             <div class="flex items-center justify-between">
               <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
                 <Database class="w-3.5 h-3.5 text-blue-600" />
-                <span>数据</span>
+                <span>物理文件</span>
               </span>
               <span v-if="linkedFileName" class="text-[10px] font-mono text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200/80">
                 已关联
@@ -287,26 +397,180 @@ const handleMediaUpload = async (e: Event) => {
             </div>
           </div>
 
-          <!-- 3. 通用行为 (彻底清理时钟失效冗余控件) -->
+          <!-- 3. WebDAV 多端云同步 -->
           <div class="space-y-3 pt-3 border-t border-slate-100">
-            <span class="text-xs font-semibold text-slate-700 block">通用</span>
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <Cloud class="w-3.5 h-3.5 text-blue-600" />
+                <span>WebDAV 云端漫游</span>
+              </span>
+              <span v-if="config.settings.webdav?.enabled" class="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/80">
+                已就绪
+              </span>
+            </div>
 
-            <div class="flex items-center justify-between text-xs text-slate-600 px-1">
-              <span>新标签页</span>
-              <button
-                @click="$emit('updateSettings', { openInNewTab: !config.settings.openInNewTab })"
-                class="w-8 h-4.5 rounded-full transition-colors relative p-0.5"
-                :class="config.settings.openInNewTab ? 'bg-blue-600' : 'bg-slate-200'"
-              >
-                <div 
-                  class="w-3.5 h-3.5 rounded-full bg-white shadow-xs transform transition-transform"
-                  :class="config.settings.openInNewTab ? 'translate-x-3.5' : 'translate-x-0'"
-                ></div>
-              </button>
+            <div class="space-y-2 p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+              <div>
+                <label class="block text-[11px] font-medium text-slate-600 mb-1">服务器 URL (支持 AList / 坚果云)</label>
+                <input
+                  v-model="webdavUrl"
+                  @change="saveWebDavConfig"
+                  type="text"
+                  placeholder="如 https://alist.lan/dav/easynavi/"
+                  class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 font-mono"
+                />
+              </div>
+
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-[11px] font-medium text-slate-600 mb-1">用户名</label>
+                  <input
+                    v-model="webdavUsername"
+                    @change="saveWebDavConfig"
+                    type="text"
+                    placeholder="可选"
+                    class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-medium text-slate-600 mb-1">密码 / Token</label>
+                  <input
+                    v-model="webdavPassword"
+                    @change="saveWebDavConfig"
+                    type="password"
+                    placeholder="可选"
+                    class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <!-- 自动同步开关 -->
+              <div class="flex items-center justify-between pt-1">
+                <span class="text-[11px] text-slate-600">本地变更后自动同步回云端</span>
+                <button
+                  type="button"
+                  @click="webdavAutoSync = !webdavAutoSync; saveWebDavConfig()"
+                  class="w-7 h-4 rounded-full transition-colors relative p-0.5"
+                  :class="webdavAutoSync ? 'bg-blue-600' : 'bg-slate-200'"
+                >
+                  <div 
+                    class="w-3 h-3 rounded-full bg-white shadow-xs transform transition-transform"
+                    :class="webdavAutoSync ? 'translate-x-3' : 'translate-x-0'"
+                  ></div>
+                </button>
+              </div>
+
+              <!-- 动作按钮群 -->
+              <div class="flex items-center gap-1.5 pt-2 border-t border-slate-200/60">
+                <button
+                  type="button"
+                  :disabled="isTestingWebdav"
+                  @click="handleTestWebDav"
+                  class="flex-1 py-1 px-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-[11px] font-medium text-slate-700 transition-colors flex items-center justify-center gap-1 active:scale-95 disabled:opacity-60"
+                >
+                  <Loader2 v-if="isTestingWebdav" class="w-3 h-3 animate-spin text-blue-600" />
+                  <span>测试连接</span>
+                </button>
+                <button
+                  type="button"
+                  :disabled="isPullingWebdav"
+                  @click="handlePullWebDav"
+                  class="flex-1 py-1 px-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-medium transition-colors flex items-center justify-center gap-1 active:scale-95 disabled:opacity-60"
+                >
+                  <Loader2 v-if="isPullingWebdav" class="w-3 h-3 animate-spin text-blue-600" />
+                  <span>拉取云端</span>
+                </button>
+                <button
+                  type="button"
+                  :disabled="isPushingWebdav"
+                  @click="handlePushWebDav"
+                  class="flex-1 py-1 px-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium transition-colors flex items-center justify-center gap-1 active:scale-95 disabled:opacity-60"
+                >
+                  <Loader2 v-if="isPushingWebdav" class="w-3 h-3 animate-spin text-white" />
+                  <span>上传云端</span>
+                </button>
+              </div>
+
+              <!-- 反馈提示 -->
+              <div v-if="webdavFeedback" class="text-[11px] pt-1" :class="webdavFeedback.success ? 'text-emerald-600' : 'text-rose-500'">
+                {{ webdavFeedback.msg }}
+              </div>
             </div>
           </div>
 
-          <!-- 4. 重置 -->
+          <!-- 4. 生态与效能复利 (探针与常用坞) -->
+          <div class="space-y-3 pt-3 border-t border-slate-100">
+            <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+              <Zap class="w-3.5 h-3.5 text-blue-600" />
+              <span>效能与生态</span>
+            </span>
+
+            <div class="space-y-2">
+              <!-- 自建服务状态探针 -->
+              <div class="flex items-center justify-between text-xs text-slate-600 px-1">
+                <div class="flex items-center gap-1.5">
+                  <Activity class="w-3.5 h-3.5 text-slate-400" />
+                  <span>服务状态探针 (Homelab 心跳)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    v-if="config.settings.enableHealthCheck"
+                    type="button"
+                    @click="$emit('triggerHealthCheck')"
+                    class="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-slate-100 transition-colors"
+                    title="立即重新探测"
+                  >
+                    <RefreshCw class="w-3 h-3" />
+                  </button>
+                  <button
+                    @click="$emit('updateSettings', { enableHealthCheck: !config.settings.enableHealthCheck })"
+                    class="w-8 h-4.5 rounded-full transition-colors relative p-0.5"
+                    :class="config.settings.enableHealthCheck ? 'bg-blue-600' : 'bg-slate-200'"
+                  >
+                    <div 
+                      class="w-3.5 h-3.5 rounded-full bg-white shadow-xs transform transition-transform"
+                      :class="config.settings.enableHealthCheck ? 'translate-x-3.5' : 'translate-x-0'"
+                    ></div>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 智能常用置顶流 -->
+              <div class="flex items-center justify-between text-xs text-slate-600 px-1">
+                <div class="flex items-center gap-1.5">
+                  <Zap class="w-3.5 h-3.5 text-slate-400" />
+                  <span>常用高频推荐流 (点击加权)</span>
+                </div>
+                <button
+                  @click="$emit('updateSettings', { showFrequentBar: !config.settings.showFrequentBar })"
+                  class="w-8 h-4.5 rounded-full transition-colors relative p-0.5"
+                  :class="config.settings.showFrequentBar ? 'bg-blue-600' : 'bg-slate-200'"
+                >
+                  <div 
+                    class="w-3.5 h-3.5 rounded-full bg-white shadow-xs transform transition-transform"
+                    :class="config.settings.showFrequentBar ? 'translate-x-3.5' : 'translate-x-0'"
+                  ></div>
+                </button>
+              </div>
+
+              <!-- 新标签页 -->
+              <div class="flex items-center justify-between text-xs text-slate-600 px-1">
+                <span>在新标签页打开站点</span>
+                <button
+                  @click="$emit('updateSettings', { openInNewTab: !config.settings.openInNewTab })"
+                  class="w-8 h-4.5 rounded-full transition-colors relative p-0.5"
+                  :class="config.settings.openInNewTab ? 'bg-blue-600' : 'bg-slate-200'"
+                >
+                  <div 
+                    class="w-3.5 h-3.5 rounded-full bg-white shadow-xs transform transition-transform"
+                    :class="config.settings.openInNewTab ? 'translate-x-3.5' : 'translate-x-0'"
+                  ></div>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. 重置 -->
           <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
             <span class="text-[11px] text-slate-400">EasyNavi v{{ config.version }}</span>
             <button
