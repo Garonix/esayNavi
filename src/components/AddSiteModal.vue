@@ -5,7 +5,9 @@ import {
   ChevronDown, 
   ChevronUp, 
   Upload,
-  Globe2
+  Globe2,
+  RotateCcw,
+  Loader2
 } from 'lucide-vue-next'
 import type { NavCategory, NavItem } from '../types/nav'
 import { 
@@ -15,7 +17,12 @@ import {
   getFallbackAvatar 
 } from '../utils/urlHelper'
 import { getHomelabIconUrl } from '../utils/homelabIcons'
-import { saveLocalMedia } from '../services/mediaStorage'
+import { resolveSiteFavicon } from '../services/faviconFetcher'
+import { 
+  normalizeToCompactIcon, 
+  extractImageFromClipboard, 
+  extractImageFromDrag 
+} from '../utils/imageHelper'
 
 const props = defineProps<{
   show: boolean
@@ -38,6 +45,8 @@ const icon = ref('')
 const selectedCategoryId = ref('')
 const showAdvanced = ref(false)
 const previewIconError = ref(false)
+const isProcessingIcon = ref(false)
+const isDragging = ref(false)
 
 watch(
   () => props.show,
@@ -57,6 +66,8 @@ watch(
         showAdvanced.value = false
       }
       previewIconError.value = false
+      isProcessingIcon.value = false
+      isDragging.value = false
 
       nextTick(() => {
         inputRef.value?.focus()
@@ -65,7 +76,7 @@ watch(
   }
 )
 
-const handleUrlInput = () => {
+const handleUrlInput = async () => {
   if (!url.value.trim()) return
 
   const normalized = normalizeUrl(url.value)
@@ -75,6 +86,14 @@ const handleUrlInput = () => {
   if (!props.editItemData && !icon.value) {
     icon.value = getFaviconUrl(normalized, title.value)
     previewIconError.value = false
+    try {
+      const direct = await resolveSiteFavicon(normalized, title.value)
+      if (direct && (!icon.value || !icon.value.startsWith('data:'))) {
+        icon.value = direct
+      }
+    } catch {
+      // 保持兜底
+    }
   }
 }
 
@@ -86,15 +105,66 @@ const handleTitleInput = () => {
   }
 }
 
+/**
+ * 核心管线：处理并设置图标（保持宽高比、居中透明、128x128 紧凑 PNG）
+ */
+const processAndSetIcon = async (fileOrBlob: Blob | File) => {
+  try {
+    isProcessingIcon.value = true
+    const compactDataUrl = await normalizeToCompactIcon(fileOrBlob, 128)
+    icon.value = compactDataUrl
+    previewIconError.value = false
+  } catch (err) {
+    console.error('图标规范化转换失败:', err)
+  } finally {
+    isProcessingIcon.value = false
+  }
+}
+
 const handleIconUpload = async (e: Event) => {
   const target = e.target as HTMLInputElement
   if (target.files && target.files[0]) {
     const file = target.files[0]
-    const { objectUrl } = await saveLocalMedia(file)
-    icon.value = objectUrl
-    previewIconError.value = false
+    await processAndSetIcon(file)
     target.value = ''
   }
+}
+
+const handleModalPaste = async (e: ClipboardEvent) => {
+  const imageFile = extractImageFromClipboard(e)
+  if (imageFile) {
+    e.preventDefault()
+    await processAndSetIcon(imageFile)
+  }
+}
+
+const handleDragOver = (e: DragEvent) => {
+  e.preventDefault()
+  isDragging.value = true
+}
+
+const handleDragLeave = (e: DragEvent) => {
+  // 避免进入子元素时闪烁
+  const currentTarget = e.currentTarget as HTMLElement
+  const relatedTarget = e.relatedTarget as Node
+  if (!currentTarget.contains(relatedTarget)) {
+    isDragging.value = false
+  }
+}
+
+const handleDrop = async (e: DragEvent) => {
+  e.preventDefault()
+  isDragging.value = false
+  const imageFile = extractImageFromDrag(e)
+  if (imageFile) {
+    await processAndSetIcon(imageFile)
+  }
+}
+
+const handleResetIcon = () => {
+  const normalized = normalizeUrl(url.value)
+  icon.value = getFaviconUrl(normalized, title.value)
+  previewIconError.value = false
 }
 
 const handleSubmit = () => {
@@ -142,6 +212,7 @@ const handleKeydown = (e: KeyboardEvent) => {
         v-if="show"
         @keydown="handleKeydown"
         @click.self="$emit('close')"
+        @paste="handleModalPaste"
         class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md select-none"
       >
         <div 
@@ -176,33 +247,58 @@ const handleKeydown = (e: KeyboardEvent) => {
               @input="handleUrlInput"
               @paste="handleUrlInput"
               type="text"
-              placeholder="https://"
+              placeholder="网址"
               required
               class="w-full bg-slate-50/80 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 focus:bg-white transition-all font-mono"
             />
           </div>
 
-          <!-- 自动识别预览卡片 (零说教) -->
-          <div v-if="url.trim()" class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
-            <div class="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-2xs">
+          <!-- 自动识别预览卡片 (支持点击换图、拖拽放图与剪贴板粘贴) -->
+          <div 
+            v-if="url.trim()" 
+            @dragover="handleDragOver"
+            @dragleave="handleDragLeave"
+            @drop="handleDrop"
+            :class="[
+              'p-2.5 rounded-xl border flex items-center gap-3 transition-all relative',
+              isDragging 
+                ? 'bg-blue-50/80 border-dashed border-blue-400 ring-2 ring-blue-500/20 scale-[1.01]' 
+                : 'bg-slate-50 border-slate-200/80'
+            ]"
+          >
+            <!-- 点击更换图标触发器 -->
+            <button
+              type="button"
+              @click="iconFileInputRef?.click()"
+              title="更换图标"
+              class="relative w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-2xs group cursor-pointer hover:border-blue-400 transition-all"
+            >
+              <div v-if="isProcessingIcon" class="w-full h-full flex items-center justify-center bg-blue-50">
+                <Loader2 class="w-4 h-4 animate-spin text-blue-600" />
+              </div>
               <img
-                v-if="icon && !previewIconError"
+                v-else-if="icon && !previewIconError"
                 :src="icon"
                 @error="previewIconError = true"
-                class="w-4 h-4 object-contain"
+                class="w-5 h-5 object-contain transition-transform group-hover:scale-105"
               />
               <div 
                 v-else 
-                class="w-full h-full bg-blue-50 text-blue-600 font-bold text-[10px] flex items-center justify-center"
+                class="w-full h-full bg-blue-50 text-blue-600 font-bold text-[11px] flex items-center justify-center"
               >
                 {{ getFallbackAvatar(title || 'Site').letter }}
               </div>
-            </div>
+              <!-- 悬浮小覆盖层 -->
+              <div class="absolute inset-0 bg-blue-600/15 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <Upload class="w-3.5 h-3.5 text-blue-700" />
+              </div>
+            </button>
+
             <div class="flex-1 min-w-0">
               <span class="text-xs font-semibold text-slate-800 truncate block">
                 {{ title || url }}
               </span>
-              <span class="text-[10px] font-mono text-slate-400 truncate block">
+              <span class="text-[10px] font-mono text-slate-400 truncate block mt-0.5">
                 {{ url }}
               </span>
             </div>
@@ -250,7 +346,19 @@ const handleKeydown = (e: KeyboardEvent) => {
             </div>
 
             <div>
-              <label class="block text-xs font-medium text-slate-600 mb-1">图标</label>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-medium text-slate-600">图标</label>
+                <button
+                  v-if="icon && icon.startsWith('data:')"
+                  type="button"
+                  @click="handleResetIcon"
+                  class="text-[10px] text-slate-400 hover:text-blue-600 flex items-center gap-0.5 transition-colors"
+                  title="重置"
+                >
+                  <RotateCcw class="w-2.5 h-2.5" />
+                  <span>重置</span>
+                </button>
+              </div>
               <div class="flex gap-2">
                 <input
                   v-model="icon"
@@ -260,16 +368,18 @@ const handleKeydown = (e: KeyboardEvent) => {
                 />
                 <button
                   type="button"
+                  :disabled="isProcessingIcon"
                   @click="iconFileInputRef?.click()"
-                  class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 rounded-xl text-xs text-slate-700 font-medium transition-colors flex items-center gap-1.5 flex-shrink-0"
+                  class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 disabled:opacity-60 rounded-xl text-xs text-slate-700 font-medium transition-colors flex items-center gap-1.5 flex-shrink-0"
                 >
-                  <Upload class="w-3.5 h-3.5 text-slate-500" />
+                  <Loader2 v-if="isProcessingIcon" class="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                  <Upload v-else class="w-3.5 h-3.5 text-slate-500" />
                   <span>上传</span>
                 </button>
                 <input
                   ref="iconFileInputRef"
                   type="file"
-                  accept="image/*"
+                  accept="image/*,.ico,.svg,.png,.jpg,.jpeg,.webp,.bmp,.gif"
                   class="hidden"
                   @change="handleIconUpload"
                 />

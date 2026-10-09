@@ -5,7 +5,8 @@ import {
   Move, 
   Edit3, 
   Copy, 
-  Trash2 
+  Trash2,
+  RefreshCw
 } from 'lucide-vue-next'
 import type { NavItem } from '../types/nav'
 
@@ -20,6 +21,7 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'openItem', item: NavItem, inNewTab: boolean): void
   (e: 'startReorder', item: NavItem): void
+  (e: 'refreshIcon', item: NavItem): void
   (e: 'editItem', item: NavItem): void
   (e: 'copyUrl', item: NavItem): void
   (e: 'deleteItem', item: NavItem): void
@@ -109,6 +111,14 @@ onUnmounted(() => {
         >
           <Copy class="w-3.5 h-3.5 text-slate-400" />
           <span>复制</span>
+        </button>
+
+        <button
+          @click="emit('refreshIcon', item); emit('close')"
+          class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-100 transition-colors text-left"
+        >
+          <RefreshCw class="w-3.5 h-3.5 text-slate-400" />
+          <span>刷新</span>
         </button>
 
         <button

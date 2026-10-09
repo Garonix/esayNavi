@@ -44,12 +44,12 @@ function getDB(): Promise<IDBDatabase> {
 /**
  * 从本地缓存获取图标 (先查内存，再查 IndexedDB)
  */
-export async function getCachedIcon(url: string): Promise<string | null> {
-  if (!url) return null
+export async function getCachedIcon(key: string): Promise<string | null> {
+  if (!key) return null
 
   // 1. 命中内存缓存
-  if (memoryCache.has(url)) {
-    return memoryCache.get(url)!
+  if (memoryCache.has(key)) {
+    return memoryCache.get(key)!
   }
 
   // 2. 查询 IndexedDB
@@ -58,12 +58,12 @@ export async function getCachedIcon(url: string): Promise<string | null> {
     return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readonly')
       const store = tx.objectStore(STORE_NAME)
-      const request = store.get(url)
+      const request = store.get(key)
 
       request.onsuccess = () => {
         const val = request.result
-        if (typeof val === 'string' && val.startsWith('data:')) {
-          memoryCache.set(url, val)
+        if (typeof val === 'string' && val.trim().length > 0) {
+          memoryCache.set(key, val)
           resolve(val)
         } else {
           resolve(null)
@@ -80,22 +80,38 @@ export async function getCachedIcon(url: string): Promise<string | null> {
 }
 
 /**
- * 将图标 DataURL 存入本地缓存
+ * 将图标 (DataURL 或已验证可用的直连地址) 存入本地缓存
  */
-export async function saveCachedIcon(url: string, dataUrl: string): Promise<void> {
-  if (!url || !dataUrl || !dataUrl.startsWith('data:')) return
+export async function saveCachedIcon(key: string, iconData: string): Promise<void> {
+  if (!key || !iconData || !iconData.trim()) return
 
   // 写入内存
-  memoryCache.set(url, dataUrl)
+  memoryCache.set(key, iconData)
 
   // 异步写入 IndexedDB
   try {
     const db = await getDB()
     const tx = db.transaction(STORE_NAME, 'readwrite')
     const store = tx.objectStore(STORE_NAME)
-    store.put(dataUrl, url)
+    store.put(iconData, key)
   } catch {
     // 忽略私密窗口或存储限额警告
+  }
+}
+
+/**
+ * 清除指定 key 的本地图标缓存
+ */
+export async function removeCachedIcon(key: string): Promise<void> {
+  if (!key) return
+  memoryCache.delete(key)
+  try {
+    const db = await getDB()
+    const tx = db.transaction(STORE_NAME, 'readwrite')
+    const store = tx.objectStore(STORE_NAME)
+    store.delete(key)
+  } catch {
+    // 忽略异常
   }
 }
 

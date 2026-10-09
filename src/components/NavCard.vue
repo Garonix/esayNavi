@@ -3,7 +3,8 @@ import { ref, computed, watch } from 'vue'
 import { GripVertical } from 'lucide-vue-next'
 import type { NavItem } from '../types/nav'
 import { getFallbackAvatar, getFaviconUrl } from '../utils/urlHelper'
-import { getCachedIcon, cacheIconFromImageElement } from '../services/iconCache'
+import { getCachedIcon, saveCachedIcon, cacheIconFromImageElement } from '../services/iconCache'
+import { resolveSiteFavicon } from '../services/faviconFetcher'
 
 const props = withDefaults(defineProps<{
   item: NavItem
@@ -88,7 +89,7 @@ const handleTouchMove = (e: TouchEvent) => {
   }
 }
 
-// 解析原始图标 URL
+// 解析原始静态图标链接
 const targetIcon = computed(() => {
   if (props.item.icon && props.item.icon.trim()) {
     return props.item.icon.trim()
@@ -96,21 +97,65 @@ const targetIcon = computed(() => {
   return getFaviconUrl(props.item.url, props.item.title)
 })
 
-// 最终呈现的图标 (优先使用本地 IndexedDB 缓存的 DataURL)
+// 最终呈现的图标：优先直接调取浏览器本地缓存
 const activeDisplayIcon = computed(() => {
   return cachedIcon.value || targetIcon.value
 })
 
+/**
+ * 本地缓存优先引擎：
+ * 1. 若配置中本身即为 DataURL，0ms 瞬开直出
+ * 2. 默认直接调取浏览器 IndexedDB 缓存，绝不重新发送网络请求，极致减负
+ * 3. 仅在未命中缓存时，异步访问目标网站直接获取原生 favicon 并写入缓存
+ */
 const checkIconCache = async () => {
-  const iconUrl = targetIcon.value
-  if (!iconUrl) return
-  if (iconUrl.startsWith('data:')) {
-    cachedIcon.value = iconUrl
+  const currentItem = props.item
+
+  // 1. 若配置中本身即为 DataURL
+  if (currentItem.icon && currentItem.icon.startsWith('data:')) {
+    cachedIcon.value = currentItem.icon
     return
   }
-  const cached = await getCachedIcon(iconUrl)
-  if (cached) {
-    cachedIcon.value = cached
+
+  // 2. 默认直接调取浏览器缓存 (先查 ID，再查 URL)
+  const cachedById = await getCachedIcon(currentItem.id)
+  if (cachedById) {
+    cachedIcon.value = cachedById
+    return
+  }
+
+  const cachedByUrl = await getCachedIcon(currentItem.url)
+  if (cachedByUrl) {
+    cachedIcon.value = cachedByUrl
+    return
+  }
+
+  if (currentItem.icon && currentItem.icon.trim()) {
+    const cachedByExplicit = await getCachedIcon(currentItem.icon.trim())
+    if (cachedByExplicit) {
+      cachedIcon.value = cachedByExplicit
+      return
+    }
+  }
+
+  // 3. 若指定了有效外链图标，写入本地缓存后呈现
+  if (currentItem.icon && currentItem.icon.trim()) {
+    cachedIcon.value = currentItem.icon.trim()
+    saveCachedIcon(currentItem.id, currentItem.icon.trim())
+    saveCachedIcon(currentItem.url, currentItem.icon.trim())
+    return
+  }
+
+  // 4. 未指定图标且无缓存：异步访问目标网站直接获取原生 favicon
+  try {
+    const resolved = await resolveSiteFavicon(currentItem.url, currentItem.title)
+    if (resolved) {
+      cachedIcon.value = resolved
+      saveCachedIcon(currentItem.id, resolved)
+      saveCachedIcon(currentItem.url, resolved)
+    }
+  } catch {
+    // 探测失败保留原目标或首字母底座
   }
 }
 

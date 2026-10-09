@@ -12,6 +12,8 @@ import {
   DEFAULT_CONFIG 
 } from './services/storage'
 import { extractSiteTitle, getFaviconUrl, normalizeUrl } from './utils/urlHelper'
+import { resolveSiteFavicon } from './services/faviconFetcher'
+import { saveCachedIcon } from './services/iconCache'
 
 import Header from './components/Header.vue'
 import CategorySection from './components/CategorySection.vue'
@@ -471,6 +473,28 @@ const handleOpenInNewTab = (item: NavItem) => {
   window.open(item.url, '_blank', 'noopener,noreferrer')
 }
 
+const handleRefreshIcon = async (item: NavItem) => {
+  const originalIcon = item.icon
+  showToast('正在获取')
+  try {
+    const newIcon = await resolveSiteFavicon(item.url, item.title)
+    if (newIcon) {
+      item.icon = newIcon
+      await saveCachedIcon(item.id, newIcon)
+      await saveCachedIcon(item.url, newIcon)
+      await persistChanges()
+      showToast('已更新')
+    } else {
+      // 若探测不到新图标，严格保留原图标
+      item.icon = originalIcon
+      showToast('已保留原图标')
+    }
+  } catch {
+    item.icon = originalIcon
+    showToast('已保留原图标')
+  }
+}
+
 const handleDropUrlOnCategory = (categoryId: string, rawUrl: string) => {
   const finalUrl = normalizeUrl(rawUrl)
   const defaultTitle = extractSiteTitle(finalUrl)
@@ -775,6 +799,7 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
       @close="handleCloseContextMenu"
       @open-item="handleOpenInNewTab"
       @copy-url="handleCopyUrl"
+      @refresh-icon="handleRefreshIcon"
       @start-reorder="handleStartReorder"
       @edit-item="handleEditItem"
       @delete-item="handleDeleteItem"

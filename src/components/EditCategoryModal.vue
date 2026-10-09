@@ -126,7 +126,7 @@ const handleConfirmDelete = () => {
               <div class="w-8 h-8 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 flex-shrink-0">
                 <AlertTriangle class="w-4 h-4" />
               </div>
-              <h4 class="text-xs font-semibold text-slate-900">删除「{{ category?.name }}」？</h4>
+              <h4 class="text-xs font-semibold text-slate-900">确认删除？</h4>
             </div>
 
             <div class="flex justify-end gap-2 pt-4 border-t border-slate-100">
