@@ -4,7 +4,7 @@
  * 避免每次刷新页面或重新打开浏览器时重复发送网络请求，实现图标毫秒级瞬开。
  */
 
-const DB_NAME = 'easynavi_icon_cache_v2'
+const DB_NAME = 'easynavi_icon_cache_v3'
 const STORE_NAME = 'icons'
 const DB_VERSION = 1
 
@@ -12,6 +12,18 @@ const DB_VERSION = 1
 const memoryCache = new Map<string, string>()
 
 let dbPromise: Promise<IDBDatabase> | null = null
+
+function cleanLegacyDatabases() {
+  if (typeof window !== 'undefined' && window.indexedDB) {
+    try {
+      indexedDB.deleteDatabase('easynavi_icon_cache_v1')
+      indexedDB.deleteDatabase('easynavi_icon_cache_v2')
+    } catch {
+      // 忽略清理异常
+    }
+  }
+}
+cleanLegacyDatabases()
 
 function getDB(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise

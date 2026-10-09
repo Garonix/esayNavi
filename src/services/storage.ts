@@ -1,6 +1,6 @@
 import type { NavConfig } from '../types/nav'
 
-const LOCAL_STORAGE_KEY = 'easynavi_config_v5'
+const LOCAL_STORAGE_KEY = 'easynavi_config_v6'
 let activeFileHandle: FileSystemFileHandle | null = null
 
 export const DEFAULT_CONFIG: NavConfig = {
@@ -51,6 +51,7 @@ export async function loadInitialConfig(): Promise<NavConfig> {
     localStorage.removeItem('easynavi_config_v2')
     localStorage.removeItem('easynavi_config_v3')
     localStorage.removeItem('easynavi_config_v4')
+    localStorage.removeItem('easynavi_config_v5')
     const cached = localStorage.getItem(LOCAL_STORAGE_KEY)
     if (cached) {
       const parsed = JSON.parse(cached)

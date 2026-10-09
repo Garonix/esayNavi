@@ -12,10 +12,8 @@ import {
   Sparkles,
   RotateCcw,
   Cloud,
-  Activity,
   Zap,
-  Loader2,
-  RefreshCw
+  Loader2
 } from 'lucide-vue-next'
 import type { NavConfig, NavSettings, BackgroundConfig, BackgroundType, WebDavConfig } from '../types/nav'
 import { isFileSystemAccessSupported } from '../services/storage'
@@ -37,18 +35,16 @@ const emit = defineEmits<{
   (e: 'exportFile'): void
   (e: 'importFile', file: File): void
   (e: 'resetDefault'): void
-  (e: 'triggerHealthCheck'): void
 }>()
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const mediaInputRef = ref<HTMLInputElement | null>(null)
 const fileApiSupported = isFileSystemAccessSupported()
 
-// WebDAV 表单状态
+// WebDAV 表单状态 (纯手动受控，零后台静默同步)
 const webdavUrl = ref('')
 const webdavUsername = ref('')
 const webdavPassword = ref('')
-const webdavAutoSync = ref(false)
 const isTestingWebdav = ref(false)
 const isPullingWebdav = ref(false)
 const isPushingWebdav = ref(false)
@@ -62,7 +58,6 @@ watch(
       webdavUrl.value = wd?.url || ''
       webdavUsername.value = wd?.username || ''
       webdavPassword.value = wd?.password || ''
-      webdavAutoSync.value = wd?.autoSync || false
       webdavFeedback.value = null
     }
   }
@@ -74,8 +69,7 @@ const saveWebDavConfig = () => {
     url: webdavUrl.value.trim(),
     username: webdavUsername.value.trim(),
     password: webdavPassword.value,
-    filename: 'nav.json',
-    autoSync: webdavAutoSync.value
+    filename: 'nav.json'
   }
   emit('updateSettings', { webdav: newWd })
 }
@@ -397,7 +391,7 @@ const handleMediaUpload = async (e: Event) => {
             </div>
           </div>
 
-          <!-- 3. WebDAV 多端云同步 -->
+          <!-- 3. WebDAV 多端云漫游 (纯手动受控，零后台静默网络请求) -->
           <div class="space-y-3 pt-3 border-t border-slate-100">
             <div class="flex items-center justify-between">
               <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
@@ -405,7 +399,7 @@ const handleMediaUpload = async (e: Event) => {
                 <span>WebDAV 云端漫游</span>
               </span>
               <span v-if="config.settings.webdav?.enabled" class="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/80">
-                已就绪
+                已配置
               </span>
             </div>
 
@@ -442,22 +436,6 @@ const handleMediaUpload = async (e: Event) => {
                     class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 font-mono"
                   />
                 </div>
-              </div>
-
-              <!-- 自动同步开关 -->
-              <div class="flex items-center justify-between pt-1">
-                <span class="text-[11px] text-slate-600">本地变更后自动同步回云端</span>
-                <button
-                  type="button"
-                  @click="webdavAutoSync = !webdavAutoSync; saveWebDavConfig()"
-                  class="w-7 h-4 rounded-full transition-colors relative p-0.5"
-                  :class="webdavAutoSync ? 'bg-blue-600' : 'bg-slate-200'"
-                >
-                  <div 
-                    class="w-3 h-3 rounded-full bg-white shadow-xs transform transition-transform"
-                    :class="webdavAutoSync ? 'translate-x-3' : 'translate-x-0'"
-                  ></div>
-                </button>
               </div>
 
               <!-- 动作按钮群 -->
@@ -498,43 +476,14 @@ const handleMediaUpload = async (e: Event) => {
             </div>
           </div>
 
-          <!-- 4. 生态与效能复利 (探针与常用坞) -->
+          <!-- 4. 习惯复利与通用行为 -->
           <div class="space-y-3 pt-3 border-t border-slate-100">
             <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
               <Zap class="w-3.5 h-3.5 text-blue-600" />
-              <span>效能与生态</span>
+              <span>习惯与行为</span>
             </span>
 
             <div class="space-y-2">
-              <!-- 自建服务状态探针 -->
-              <div class="flex items-center justify-between text-xs text-slate-600 px-1">
-                <div class="flex items-center gap-1.5">
-                  <Activity class="w-3.5 h-3.5 text-slate-400" />
-                  <span>服务状态探针 (Homelab 心跳)</span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <button
-                    v-if="config.settings.enableHealthCheck"
-                    type="button"
-                    @click="$emit('triggerHealthCheck')"
-                    class="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-slate-100 transition-colors"
-                    title="立即重新探测"
-                  >
-                    <RefreshCw class="w-3 h-3" />
-                  </button>
-                  <button
-                    @click="$emit('updateSettings', { enableHealthCheck: !config.settings.enableHealthCheck })"
-                    class="w-8 h-4.5 rounded-full transition-colors relative p-0.5"
-                    :class="config.settings.enableHealthCheck ? 'bg-blue-600' : 'bg-slate-200'"
-                  >
-                    <div 
-                      class="w-3.5 h-3.5 rounded-full bg-white shadow-xs transform transition-transform"
-                      :class="config.settings.enableHealthCheck ? 'translate-x-3.5' : 'translate-x-0'"
-                    ></div>
-                  </button>
-                </div>
-              </div>
-
               <!-- 智能常用置顶流 -->
               <div class="flex items-center justify-between text-xs text-slate-600 px-1">
                 <div class="flex items-center gap-1.5">

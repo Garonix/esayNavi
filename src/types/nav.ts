@@ -35,7 +35,6 @@ export interface WebDavConfig {
   username: string
   password?: string
   filename?: string
-  autoSync?: boolean
 }
 
 export interface NavSettings {
@@ -48,7 +47,6 @@ export interface NavSettings {
   showClock: boolean
   showSearch: boolean
   showFrequentBar?: boolean // 智能常用置顶流
-  enableHealthCheck?: boolean // 自建服务存活探针
   webdav?: WebDavConfig
 }
 

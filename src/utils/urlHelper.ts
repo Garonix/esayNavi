@@ -99,8 +99,8 @@ export function getFaviconUrl(urlStr: string, siteTitle?: string): string {
     const url = new URL(normalized)
     const domain = url.hostname
 
-    // 1. 优先探测是否命中自建服务 / Homelab 特征词典
-    const homelabIcon = getHomelabIconUrl(siteTitle || '') || getHomelabIconUrl(domain) || getHomelabIconUrl(url.pathname)
+    // 1. 优先探测是否命中自建服务 / Homelab 特征词典 (严格通过标题与域名判断)
+    const homelabIcon = getHomelabIconUrl(siteTitle || '') || getHomelabIconUrl(domain)
     if (homelabIcon) {
       return homelabIcon
     }

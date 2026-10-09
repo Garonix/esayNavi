@@ -1,21 +1,17 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { GripVertical } from 'lucide-vue-next'
 import type { NavItem } from '../types/nav'
 import { getFallbackAvatar, getFaviconUrl } from '../utils/urlHelper'
-import { getCachedIcon, saveCachedIcon, cacheIconFromImageElement } from '../services/iconCache'
-import { resolveSiteFavicon } from '../services/faviconFetcher'
 
 const props = withDefaults(defineProps<{
   item: NavItem
   openInNewTab: boolean
   isReordering?: boolean
   isFocused?: boolean
-  healthStatus?: 'healthy' | 'unhealthy' | 'checking' | 'unknown'
 }>(), {
   isReordering: false,
-  isFocused: false,
-  healthStatus: 'unknown'
+  isFocused: false
 })
 
 const emit = defineEmits<{
@@ -26,7 +22,14 @@ const emit = defineEmits<{
 
 const iconError = ref(false)
 const fallback = getFallbackAvatar(props.item.title)
-const cachedIcon = ref<string | null>(null)
+
+// 解析静态图标链接 (纯静态确定性渲染，零后台异步主动网络请求)
+const displayIcon = computed(() => {
+  if (props.item.icon && props.item.icon.trim()) {
+    return props.item.icon.trim()
+  }
+  return getFaviconUrl(props.item.url, props.item.title)
+})
 
 // 长按触发位置调整模式 (仿手机 App 长按抖动交互)
 let longPressTimer: number | null = null
@@ -93,102 +96,8 @@ const handleTouchMove = (e: TouchEvent) => {
   }
 }
 
-// 解析原始静态图标链接
-const targetIcon = computed(() => {
-  if (props.item.icon && props.item.icon.trim()) {
-    return props.item.icon.trim()
-  }
-  return getFaviconUrl(props.item.url, props.item.title)
-})
-
-// 最终呈现的图标：优先直接调取浏览器本地缓存
-const activeDisplayIcon = computed(() => {
-  return cachedIcon.value || targetIcon.value
-})
-
-/**
- * 本地缓存优先引擎：
- * 1. 若配置中本身即为 DataURL，0ms 瞬开直出
- * 2. 默认直接调取浏览器 IndexedDB 缓存，绝不重新发送网络请求，极致减负
- * 3. 仅在未命中缓存时，异步访问目标网站直接获取原生 favicon 并写入缓存
- */
-const checkIconCache = async () => {
-  const currentItem = props.item
-
-  // 1. 若配置中本身即为 DataURL
-  if (currentItem.icon && currentItem.icon.startsWith('data:')) {
-    cachedIcon.value = currentItem.icon
-    return
-  }
-
-  // 2. 默认直接调取浏览器缓存 (先查 ID，再查 URL)
-  const cachedById = await getCachedIcon(currentItem.id)
-  if (cachedById) {
-    cachedIcon.value = cachedById
-    return
-  }
-
-  const cachedByUrl = await getCachedIcon(currentItem.url)
-  if (cachedByUrl) {
-    cachedIcon.value = cachedByUrl
-    return
-  }
-
-  if (currentItem.icon && currentItem.icon.trim()) {
-    const cachedByExplicit = await getCachedIcon(currentItem.icon.trim())
-    if (cachedByExplicit) {
-      cachedIcon.value = cachedByExplicit
-      return
-    }
-  }
-
-  // 3. 若指定了有效外链图标，写入本地缓存后呈现
-  if (currentItem.icon && currentItem.icon.trim()) {
-    cachedIcon.value = currentItem.icon.trim()
-    saveCachedIcon(currentItem.id, currentItem.icon.trim())
-    saveCachedIcon(currentItem.url, currentItem.icon.trim())
-    return
-  }
-
-  // 4. 未指定图标且无缓存：异步访问目标网站直接获取原生 favicon
-  try {
-    const resolved = await resolveSiteFavicon(currentItem.url, currentItem.title)
-    if (resolved) {
-      cachedIcon.value = resolved
-      saveCachedIcon(currentItem.id, resolved)
-      saveCachedIcon(currentItem.url, resolved)
-    }
-  } catch {
-    // 探测失败保留原目标或首字母底座
-  }
-}
-
-watch(
-  () => [props.item.icon, props.item.url, props.item.title],
-  () => {
-    iconError.value = false
-    cachedIcon.value = null
-    checkIconCache()
-  },
-  { immediate: true }
-)
-
 const handleIconError = () => {
-  if (cachedIcon.value) {
-    // 缓存数据异常或失效时，平滑回退至原始 URL
-    cachedIcon.value = null
-  } else {
-    // 原始 URL 确实无法访问时才降级为首字母底座
-    iconError.value = true
-  }
-}
-
-const handleImageLoad = (e: Event) => {
-  const img = e.target as HTMLImageElement
-  const originalUrl = targetIcon.value
-  if (originalUrl && !cachedIcon.value && !originalUrl.startsWith('data:')) {
-    cacheIconFromImageElement(img, originalUrl)
-  }
+  iconError.value = true
 }
 
 const handleClick = (e: MouseEvent) => {
@@ -269,22 +178,6 @@ const handleMouseLeave = () => {
     ]"
     :title="item.title"
   >
-    <!-- 状态探针微标 (零侵入呼吸状态指示) -->
-    <div
-      v-if="healthStatus && healthStatus !== 'unknown'"
-      class="absolute top-2 left-2 z-10 flex items-center gap-1 pointer-events-none"
-    >
-      <span 
-        class="w-1.5 h-1.5 rounded-full transition-colors"
-        :class="{
-          'bg-emerald-500 ring-2 ring-emerald-500/20 animate-pulse': healthStatus === 'healthy',
-          'bg-rose-500 ring-2 ring-rose-500/20': healthStatus === 'unhealthy',
-          'bg-amber-400 animate-pulse': healthStatus === 'checking'
-        }"
-        :title="healthStatus === 'healthy' ? '在线' : healthStatus === 'unhealthy' ? '离线' : '探测中'"
-      ></span>
-    </div>
-
     <!-- 极轻量跟随聚光灯高光 (仅反射光泽，绝不阻断心流) -->
     <div
       v-if="isHovering && !isReordering"
@@ -302,14 +195,13 @@ const handleMouseLeave = () => {
       <GripVertical class="w-2.5 h-2.5" />
     </div>
 
-    <!-- 1. 高清大图标区（以图标为主，无任何生硬外边框） -->
+    <!-- 1. 高清大图标区（以图标为主，无任何生硬外边框，静态直出） -->
     <div class="w-10 h-10 flex items-center justify-center flex-shrink-0 transition-transform duration-200 ease-out group-hover:scale-110">
       <img
-        v-if="activeDisplayIcon && !iconError"
-        :key="activeDisplayIcon"
-        :src="activeDisplayIcon"
+        v-if="displayIcon && !iconError"
+        :key="displayIcon"
+        :src="displayIcon"
         :alt="item.title"
-        @load="handleImageLoad"
         @error="handleIconError"
         class="w-9 h-9 object-contain drop-shadow-2xs pointer-events-none"
         loading="lazy"
@@ -342,7 +234,7 @@ const handleMouseLeave = () => {
 
 @keyframes app-jiggle-odd {
   0% { transform: rotate(1.2deg) scale(1.01); }
-  50% { transform: rotate(-1.2deg) scale(1.01); }
+  50% { transform: rotate(1.2deg) scale(1.01); }
   100% { transform: rotate(1.2deg) scale(1.01); }
 }
 

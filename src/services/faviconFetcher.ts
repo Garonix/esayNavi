@@ -87,8 +87,8 @@ export async function resolveSiteFavicon(siteUrl: string, siteTitle?: string): P
       return dataUrl || directFaviconUrl
     }
 
-    // 2. 匹配自建服务特征库
-    const homelabIcon = getHomelabIconUrl(siteTitle || '') || getHomelabIconUrl(domain) || getHomelabIconUrl(urlObj.pathname)
+    // 2. 匹配自建服务特征库 (严格通过标题与域名判断)
+    const homelabIcon = getHomelabIconUrl(siteTitle || '') || getHomelabIconUrl(domain)
     if (homelabIcon) {
       const isHomelabOk = await testImageLoad(homelabIcon, 2200)
       if (isHomelabOk) {

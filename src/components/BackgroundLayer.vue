@@ -39,57 +39,6 @@ const resolveSource = async () => {
   activeUrl.value = props.config.url || ''
 }
 
-watch(
-  () => [props.config?.type, props.config?.url, props.config?.localKey],
-  () => {
-    isLoaded.value = false
-    resolveSource()
-    if (props.config?.type === 'particles') {
-      initParticleCanvas()
-    }
-  },
-  { immediate: true }
-)
-
-// 视差滚动与鼠标微移
-const handleScroll = () => {
-  if (!props.config?.parallax || props.zenMode) {
-    scrollOffsetY.value = 0
-    return
-  }
-  scrollOffsetY.value = window.scrollY * 0.28
-}
-
-const handleMouseMove = (e: MouseEvent) => {
-  mousePos.value = { x: e.clientX, y: e.clientY }
-
-  if (!props.config?.parallax || props.zenMode) {
-    parallaxTranslateX.value = 0
-    parallaxTranslateY.value = 0
-    return
-  }
-
-  const { innerWidth: w, innerHeight: h } = window
-  const nx = (e.clientX - w / 2) / (w / 2)
-  const ny = (e.clientY - h / 2) / (h / 2)
-
-  parallaxTranslateX.value = -nx * 10
-  parallaxTranslateY.value = -ny * 10
-}
-
-// 节能机制
-const handleVisibilityChange = () => {
-  if (document.hidden) {
-    videoRef.value?.pause()
-    stopParticleAnimation()
-  } else {
-    videoRef.value?.play().catch(() => {})
-    if (props.config?.type === 'particles') {
-      startParticleAnimation()
-    }
-  }
-}
-
 // ----------------------------------------------------
 // 原生星河微粒（Interactive Particles）画布引擎
 // ----------------------------------------------------
@@ -106,19 +55,7 @@ let particles: Particle[] = []
 let particleAnimId: number | null = null
 let canvasCtx: CanvasRenderingContext2D | null = null
 
-const initParticleCanvas = () => {
-  if (typeof window === 'undefined') return
-  setTimeout(() => {
-    const canvas = canvasRef.value
-    if (!canvas) return
-    canvasCtx = canvas.getContext('2d')
-    resizeCanvas()
-    createParticles()
-    startParticleAnimation()
-  }, 50)
-}
-
-const resizeCanvas = () => {
+function resizeCanvas() {
   const canvas = canvasRef.value
   if (!canvas) return
   const dpr = window.devicePixelRatio || 1
@@ -129,7 +66,7 @@ const resizeCanvas = () => {
   }
 }
 
-const createParticles = () => {
+function createParticles() {
   const count = Math.min(80, Math.floor((window.innerWidth * window.innerHeight) / 14000))
   particles = []
   for (let i = 0; i < count; i++) {
@@ -144,7 +81,14 @@ const createParticles = () => {
   }
 }
 
-const startParticleAnimation = () => {
+function stopParticleAnimation() {
+  if (particleAnimId) {
+    cancelAnimationFrame(particleAnimId)
+    particleAnimId = null
+  }
+}
+
+function startParticleAnimation() {
   if (particleAnimId) cancelAnimationFrame(particleAnimId)
   
   const render = () => {
@@ -158,7 +102,7 @@ const startParticleAnimation = () => {
     const mx = mousePos.value.x
     const my = mousePos.value.y
 
-    // 粒子连线 (距离 < 120px)
+    // 粒子连线 (距离 < 115px)
     for (let i = 0; i < particles.length; i++) {
       const p1 = particles[i]
       for (let j = i + 1; j < particles.length; j++) {
@@ -212,12 +156,70 @@ const startParticleAnimation = () => {
   particleAnimId = requestAnimationFrame(render)
 }
 
-const stopParticleAnimation = () => {
-  if (particleAnimId) {
-    cancelAnimationFrame(particleAnimId)
-    particleAnimId = null
+function initParticleCanvas() {
+  if (typeof window === 'undefined') return
+  setTimeout(() => {
+    const canvas = canvasRef.value
+    if (!canvas) return
+    canvasCtx = canvas.getContext('2d')
+    resizeCanvas()
+    createParticles()
+    startParticleAnimation()
+  }, 50)
+}
+
+watch(
+  () => [props.config?.type, props.config?.url, props.config?.localKey],
+  () => {
+    isLoaded.value = false
+    resolveSource()
+    if (props.config?.type === 'particles') {
+      initParticleCanvas()
+    }
+  },
+  { immediate: true }
+)
+
+// 视差滚动与鼠标微移
+const handleScroll = () => {
+  if (!props.config?.parallax || props.zenMode) {
+    scrollOffsetY.value = 0
+    return
+  }
+  scrollOffsetY.value = window.scrollY * 0.28
+}
+
+const handleMouseMove = (e: MouseEvent) => {
+  mousePos.value = { x: e.clientX, y: e.clientY }
+
+  if (!props.config?.parallax || props.zenMode) {
+    parallaxTranslateX.value = 0
+    parallaxTranslateY.value = 0
+    return
+  }
+
+  const { innerWidth: w, innerHeight: h } = window
+  const nx = (e.clientX - w / 2) / (w / 2)
+  const ny = (e.clientY - h / 2) / (h / 2)
+
+  parallaxTranslateX.value = -nx * 10
+  parallaxTranslateY.value = -ny * 10
+}
+
+// 节能机制
+const handleVisibilityChange = () => {
+  if (document.hidden) {
+    videoRef.value?.pause()
+    stopParticleAnimation()
+  } else {
+    videoRef.value?.play().catch(() => {})
+    if (props.config?.type === 'particles') {
+      startParticleAnimation()
+    }
   }
 }
+
+
 
 onMounted(() => {
   window.addEventListener('scroll', handleScroll, { passive: true })
@@ -336,7 +338,7 @@ const maskStyle = computed(() => {
 
     <!-- 4. 光学防噪蒙层与毛玻璃层 (保护卡片对比度，Zen模式平滑淡出) -->
     <div 
-      v-if="config && config.type !== 'mesh' && (config.type === 'particles' || activeUrl)"
+      v-if="config && (config.type === 'image' || config.type === 'video') && activeUrl"
       class="absolute inset-0 transition-all duration-300 pointer-events-none"
       :style="maskStyle"
     ></div>

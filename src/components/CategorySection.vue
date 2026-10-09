@@ -37,14 +37,12 @@ const props = withDefaults(defineProps<{
   isReorderMode?: boolean
   draggedCard?: { categoryId: string; item: NavItem; index: number } | null
   focusedCardId?: string | null
-  healthStatusMap?: Record<string, 'healthy' | 'unhealthy' | 'checking' | 'unknown'>
 }>(), {
   isContextMenuActive: false,
   isAnyContextMenuActive: false,
   isReorderMode: false,
   draggedCard: null,
-  focusedCardId: null,
-  healthStatusMap: () => ({})
+  focusedCardId: null
 })
 
 const emit = defineEmits<{
@@ -736,7 +734,6 @@ const getCategoryIcon = (iconName?: string) => {
             :open-in-new-tab="openInNewTab"
             :is-reordering="isReorderMode"
             :is-focused="focusedCardId === card.item.id"
-            :health-status="healthStatusMap ? healthStatusMap[card.item.id] : undefined"
             @click-item="$emit('clickItem', $event)"
             @open-context-menu="$emit('openContextMenu', { ...$event, categoryId: category.id })"
             @start-reorder="handleCardStartReorder($event, idx)"

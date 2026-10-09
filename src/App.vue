@@ -15,8 +15,6 @@ import { extractSiteTitle, getFaviconUrl, normalizeUrl } from './utils/urlHelper
 import { matchPinyinQuery } from './utils/pinyinHelper'
 import { resolveSiteFavicon } from './services/faviconFetcher'
 import { saveCachedIcon } from './services/iconCache'
-import { pushToWebDav } from './services/webdav'
-import { healthStatusMap, runHealthCheckForAll } from './services/healthChecker'
 
 import Header from './components/Header.vue'
 import CategorySection from './components/CategorySection.vue'
@@ -75,8 +73,6 @@ const showToast = (msg: string) => {
   }, 1800)
 }
 
-let webdavAutoSyncTimer: number | null = null
-
 const persistChanges = async () => {
   saveConfigToLocal(config.value)
   if (linkedFileName.value) {
@@ -84,18 +80,6 @@ const persistChanges = async () => {
     if (success) {
       showToast('已写回')
     }
-  }
-
-  // WebDAV 自动增量写回云端
-  if (config.value.settings.webdav?.enabled && config.value.settings.webdav?.autoSync) {
-    if (webdavAutoSyncTimer) clearTimeout(webdavAutoSyncTimer)
-    webdavAutoSyncTimer = window.setTimeout(async () => {
-      try {
-        await pushToWebDav(config.value.settings.webdav!, config.value)
-      } catch {
-        // 静默处理，避免干扰普通交互
-      }
-    }, 1500)
   }
 }
 
@@ -178,13 +162,6 @@ const handleGlobalDragOver = (e: DragEvent) => {
   }
 }
 
-const triggerHealthCheck = () => {
-  if (config.value.categories.length > 0) {
-    runHealthCheckForAll(config.value.categories)
-    showToast('正在探测服务')
-  }
-}
-
 // 高频常用推荐流 (基于真实点击量加权提炼)
 const frequentItems = computed<NavItem[]>(() => {
   if (!config.value.settings.showFrequentBar || searchQuery.value.trim()) return []
@@ -205,18 +182,9 @@ const handleUpdateFullConfig = (newConfig: NavConfig) => {
   showToast('云端配置已载入')
 }
 
-watch(() => config.value.settings.enableHealthCheck, (enabled) => {
-  if (enabled) {
-    triggerHealthCheck()
-  }
-})
-
 onMounted(async () => {
   config.value = await loadInitialConfig()
   isLoaded.value = true
-  if (config.value.settings.enableHealthCheck) {
-    setTimeout(triggerHealthCheck, 800)
-  }
   window.addEventListener('keydown', handleGlobalKeydown)
   window.addEventListener('pointermove', handleGlobalPointerMove, { passive: true })
   window.addEventListener('pointerup', stopAutoScroll)
@@ -801,7 +769,6 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
             :is-reorder-mode="isReorderMode"
             :dragged-card="draggedCardInfo"
             :focused-card-id="activeFocusedCard?.id"
-            :health-status-map="healthStatusMap"
             @click-item="handleClickItem"
             @open-context-menu="handleOpenContextMenu"
             @add-item-to-category="openAddModal"
@@ -905,7 +872,6 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
       @close="showSettingsModal = false"
       @update-settings="handleUpdateSettings"
       @update-full-config="handleUpdateFullConfig"
-      @trigger-health-check="triggerHealthCheck"
       @connect-file="handleConnectFile"
       @sync-file="handleSyncFile"
       @export-file="handleExportFile"
