@@ -10,7 +10,10 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      injectRegister: false,
+      devOptions: {
+        enabled: false
+      },
       includeAssets: ['favicon.svg', 'icons.svg'],
       manifest: {
         name: 'EasyNavi 极简导航',
