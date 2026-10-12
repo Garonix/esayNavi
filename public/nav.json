@@ -236,7 +236,7 @@
           "id": "item-wan1-4",
           "title": "blog",
           "url": "https://blog.zeges.top",
-          "icon": "https://www.google.com/s2/favicons?domain=blog.zeges.top&sz=128",
+          "icon": "",
           "pinned": false
         },
         {
@@ -299,7 +299,7 @@
           "id": "item-wan1-13",
           "title": "tie",
           "url": "https://tie.zeges.top",
-          "icon": "https://www.google.com/s2/favicons?domain=tie.zeges.top&sz=128",
+          "icon": "",
           "pinned": false
         }
       ]
@@ -313,7 +313,7 @@
           "id": "item-2-1",
           "title": "Img-Api",
           "url": "https://api-img.zeges.top",
-          "icon": "https://www.google.com/s2/favicons?domain=api-img.zeges.top&sz=128",
+          "icon": "",
           "pinned": false
         },
         {
@@ -327,7 +327,7 @@
           "id": "item-2-3",
           "title": "kit",
           "url": "https://kit.zeges.top/",
-          "icon": "https://www.google.com/s2/favicons?domain=kit.zeges.top&sz=128",
+          "icon": "",
           "pinned": false
         },
         {

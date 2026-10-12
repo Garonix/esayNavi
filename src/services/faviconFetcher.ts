@@ -1,4 +1,4 @@
-import { normalizeUrl, isPrivateNetwork } from '../utils/urlHelper'
+import { normalizeUrl } from '../utils/urlHelper'
 import { getHomelabIconUrl } from '../utils/homelabIcons'
 import { normalizeToCompactIcon } from '../utils/imageHelper'
 
@@ -97,27 +97,7 @@ export async function resolveSiteFavicon(siteUrl: string, siteTitle?: string): P
       }
     }
 
-    // 3. 私有内网地址若根目录无 favicon.ico，直接停止，绝不请求外网
-    if (isPrivateNetwork(domain)) {
-      return null
-    }
-
-    // 4. 公网备用源：Google Favicon 服务（支持 128px 高清并解析真实 HTML <link rel="icon">）
-    const googleFaviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`
-    const isGoogleOk = await testImageLoad(googleFaviconUrl, 2200)
-    if (isGoogleOk) {
-      const dataUrl = await tryConvertToDataUrl(googleFaviconUrl)
-      return dataUrl || googleFaviconUrl
-    }
-
-    // 5. 次级备用源：DuckDuckGo Favicon 服务
-    const ddgFaviconUrl = `https://icons.duckduckgo.com/ip3/${domain}.ico`
-    const isDdgOk = await testImageLoad(ddgFaviconUrl, 1800)
-    if (isDdgOk) {
-      const dataUrl = await tryConvertToDataUrl(ddgFaviconUrl)
-      return dataUrl || ddgFaviconUrl
-    }
-
+    // 3. 严格遵循第一性原理：绝不使用任何不可靠的外部第三方 Favicon API 服务
     return null
   } catch {
     return null

@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { GripVertical } from 'lucide-vue-next'
 import type { NavItem } from '../types/nav'
 import { getFallbackAvatar, getFaviconUrl } from '../utils/urlHelper'
+import { getCachedIconSync, cacheIconFromImageElement } from '../services/iconCache'
 
 const props = withDefaults(defineProps<{
   item: NavItem
@@ -23,11 +24,26 @@ const emit = defineEmits<{
 const iconError = ref(false)
 const fallback = getFallbackAvatar(props.item.title)
 
-// 解析静态图标链接 (纯静态确定性渲染，零后台异步主动网络请求)
+// 解析静态图标链接 (纯静态确定性渲染：优先内联 DataURL/SVG，次之同步本地缓存，次之显式外链，次之本地 Homelab 图标)
 const displayIcon = computed(() => {
-  if (props.item.icon && props.item.icon.trim()) {
-    return props.item.icon.trim()
+  const explicitIcon = props.item.icon?.trim()
+  // 1. 若配置中本身就是内联 DataURL 或 SVG/本地资产，直接 0ms 纯静态直出
+  if (explicitIcon && (explicitIcon.startsWith('data:') || explicitIcon.startsWith('/') || explicitIcon.endsWith('.svg'))) {
+    return explicitIcon
   }
+
+  // 2. 检查本地 IndexedDB 同步预热缓存 (以 item.id 或 item.url 为 key)
+  const cached = (props.item.id && getCachedIconSync(props.item.id)) || (props.item.url ? getCachedIconSync(props.item.url) : null)
+  if (cached) {
+    return cached
+  }
+
+  // 3. 显式指定的普通外链
+  if (explicitIcon) {
+    return explicitIcon
+  }
+
+  // 4. 本地内置 Homelab 特征图（绝不请求外部第三方 API）
   return getFaviconUrl(props.item.url, props.item.title)
 })
 
@@ -92,6 +108,18 @@ const handleTouchMove = (e: TouchEvent) => {
     const dy = Math.abs(e.touches[0].clientY - startClientY)
     if (dx > 8 || dy > 8) {
       clearLongPress()
+    }
+  }
+}
+
+const handleIconLoad = (e: Event) => {
+  const img = e.target as HTMLImageElement
+  if (!img || !props.item.id) return
+  // 若成功加载且尚未缓存过，尝试自动固化存入本地 IndexedDB 缓存
+  const currentSrc = img.currentSrc || img.src
+  if (currentSrc && !currentSrc.startsWith('data:')) {
+    if (!getCachedIconSync(props.item.id)) {
+      cacheIconFromImageElement(img, props.item.id)
     }
   }
 }
@@ -202,9 +230,10 @@ const handleMouseLeave = () => {
         :key="displayIcon"
         :src="displayIcon"
         :alt="item.title"
+        @load="handleIconLoad"
         @error="handleIconError"
+        decoding="async"
         class="w-9 h-9 object-contain drop-shadow-2xs pointer-events-none"
-        loading="lazy"
       />
       <!-- 无边框平滑首字母占位底座 -->
       <div 

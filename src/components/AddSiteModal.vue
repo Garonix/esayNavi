@@ -17,7 +17,6 @@ import {
   getFallbackAvatar 
 } from '../utils/urlHelper'
 import { getHomelabIconUrl } from '../utils/homelabIcons'
-import { resolveSiteFavicon } from '../services/faviconFetcher'
 import { 
   normalizeToCompactIcon, 
   extractImageFromClipboard, 
@@ -76,7 +75,7 @@ watch(
   }
 )
 
-const handleUrlInput = async () => {
+const handleUrlInput = () => {
   if (!url.value.trim()) return
 
   const normalized = normalizeUrl(url.value)
@@ -84,15 +83,10 @@ const handleUrlInput = async () => {
     title.value = extractSiteTitle(normalized)
   }
   if (!props.editItemData && !icon.value) {
-    icon.value = getFaviconUrl(normalized, title.value)
-    previewIconError.value = false
-    try {
-      const direct = await resolveSiteFavicon(normalized, title.value)
-      if (direct && (!icon.value || !icon.value.startsWith('data:'))) {
-        icon.value = direct
-      }
-    } catch {
-      // 保持兜底
+    const homelab = getFaviconUrl(normalized, title.value)
+    if (homelab) {
+      icon.value = homelab
+      previewIconError.value = false
     }
   }
 }

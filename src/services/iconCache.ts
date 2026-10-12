@@ -54,6 +54,47 @@ function getDB(): Promise<IDBDatabase> {
 }
 
 /**
+ * 预热并同步 IndexedDB 所有图标缓存至内存 Map
+ * 确保页面渲染第一帧即可 0ms 纯同步直出图标，彻底消除渲染闪烁与排队延迟
+ */
+export async function initIconCache(): Promise<void> {
+  try {
+    const db = await getDB()
+    await new Promise<void>((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly')
+      const store = tx.objectStore(STORE_NAME)
+      const cursorRequest = store.openCursor()
+
+      cursorRequest.onsuccess = () => {
+        const cursor = cursorRequest.result
+        if (cursor) {
+          if (typeof cursor.value === 'string' && cursor.value.trim().length > 0) {
+            memoryCache.set(String(cursor.key), cursor.value)
+          }
+          cursor.continue()
+        } else {
+          resolve()
+        }
+      }
+
+      cursorRequest.onerror = () => {
+        resolve()
+      }
+    })
+  } catch {
+    // 忽略异常
+  }
+}
+
+/**
+ * 纯同步极速获取内存图标缓存 (0ms 瞬开直出)
+ */
+export function getCachedIconSync(key: string): string | null {
+  if (!key) return null
+  return memoryCache.get(key) || null
+}
+
+/**
  * 从本地缓存获取图标 (先查内存，再查 IndexedDB)
  */
 export async function getCachedIcon(key: string): Promise<string | null> {

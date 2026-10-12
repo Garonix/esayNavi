@@ -14,7 +14,7 @@ import {
 import { extractSiteTitle, getFaviconUrl, normalizeUrl } from './utils/urlHelper'
 import { matchPinyinQuery } from './utils/pinyinHelper'
 import { resolveSiteFavicon } from './services/faviconFetcher'
-import { saveCachedIcon } from './services/iconCache'
+import { saveCachedIcon, initIconCache } from './services/iconCache'
 
 import Header from './components/Header.vue'
 import CategorySection from './components/CategorySection.vue'
@@ -183,6 +183,7 @@ const handleUpdateFullConfig = (newConfig: NavConfig) => {
 }
 
 onMounted(async () => {
+  await initIconCache()
   config.value = await loadInitialConfig()
   isLoaded.value = true
   window.addEventListener('keydown', handleGlobalKeydown)

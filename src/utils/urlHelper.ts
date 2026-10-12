@@ -89,9 +89,8 @@ export function extractSiteTitle(urlStr: string): string {
 
 /**
  * 智能获取网站图标：
- * 1. 优先匹配 Homelab / 自建服务特征库（如 qbit, homeassistant, dockge, emby 等）
- * 2. 公网域名调用 Google Favicon API
- * 3. 内网域名尝试探测根目录 favicon.ico
+ * 1. 优先匹配本地 Homelab / 自建服务特征库（如 qbit, homeassistant, dockge, emby 等）
+ * 2. 依第一性原理，绝不使用任何不可靠的外部第三方 Favicon API
  */
 export function getFaviconUrl(urlStr: string, siteTitle?: string): string {
   try {
@@ -105,13 +104,8 @@ export function getFaviconUrl(urlStr: string, siteTitle?: string): string {
       return homelabIcon
     }
 
-    // 2. 若是私有局域网 IP/域名，绝不请求外网 Google Favicon（必不可达）
-    if (isPrivateNetwork(domain)) {
-      return `${url.origin}/favicon.ico`
-    }
-
-    // 3. 公网域名使用 Google Favicon 服务
-    return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`
+    // 2. 无本地匹配时返回空，不主动发起任何外部第三方 API 请求
+    return ''
   } catch {
     return ''
   }
