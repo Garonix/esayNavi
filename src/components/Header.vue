@@ -3,14 +3,12 @@ import { ref, computed, h, onMounted, onUnmounted } from 'vue'
 import { 
   Search, 
   X, 
-  FileCheck2,
   CornerDownLeft
 } from 'lucide-vue-next'
 import type { NavSettings } from '../types/nav'
 
 const props = defineProps<{
   settings: NavSettings
-  linkedFileName: string | null
   searchQuery: string
   hasActiveCardFocus?: boolean
   focusedCardTitle?: string
@@ -211,15 +209,6 @@ onUnmounted(() => {
 
 <template>
   <header class="relative z-40 w-full max-w-4xl mx-auto px-6 sm:px-12 md:px-16 pt-7 pb-4 flex flex-col items-center select-none">
-    <!-- 物理文件直连极简标识 -->
-    <div v-if="linkedFileName" class="mb-2">
-      <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono text-slate-500 bg-white/80 border border-slate-200/80 shadow-2xs backdrop-blur-md">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-        <FileCheck2 class="w-3 h-3 text-slate-400" />
-        <span class="font-medium">{{ linkedFileName }}</span>
-      </div>
-    </div>
-
     <!-- Spotlight 极简扁平搜索栏 -->
     <div class="w-full max-w-md relative">
       <div 
@@ -300,7 +289,7 @@ onUnmounted(() => {
             @input="$emit('update:searchQuery', ($event.target as HTMLInputElement).value); $emit('clearFocus')"
             @keydown="handleInputKeydown"
             type="text"
-            placeholder="搜索或输入拼音 (支持 g/b/gh 前缀直达)"
+            placeholder="搜索或拼音"
             class="w-full bg-transparent px-2.5 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none"
           />
         </div>

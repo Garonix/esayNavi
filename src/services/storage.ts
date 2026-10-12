@@ -1,7 +1,6 @@
 import type { NavConfig } from '../types/nav'
 
 const LOCAL_STORAGE_KEY = 'easynavi_config_v6'
-let activeFileHandle: FileSystemFileHandle | null = null
 
 export const DEFAULT_CONFIG: NavConfig = {
   version: '1.2.2',
@@ -57,9 +56,15 @@ export async function loadInitialConfig(): Promise<NavConfig> {
       const parsed = JSON.parse(cached)
       if (parsed && parsed.categories && parsed.categories.length > 0) {
         let needSave = ensureUniqueItemIds(parsed)
-        if (parsed.settings && parsed.settings.background === 'mesh' && !parsed.settings.customBackground) {
-          parsed.settings.background = 'white'
-          needSave = true
+        if (parsed.settings) {
+          if (parsed.settings.background === 'particles' || parsed.settings.background === 'video' || (parsed.settings.background === 'mesh' && !parsed.settings.customBackground)) {
+            parsed.settings.background = 'white'
+            needSave = true
+          }
+          if (parsed.settings.customBackground && (parsed.settings.customBackground.type === 'particles' || (parsed.settings.customBackground.type as any) === 'video')) {
+            parsed.settings.customBackground.type = 'white'
+            needSave = true
+          }
         }
         if (needSave) {
           saveConfigToLocal(parsed)
@@ -124,71 +129,4 @@ export async function importConfigFile(file: File): Promise<NavConfig> {
   }
   ensureUniqueItemIds(parsed as NavConfig)
   return parsed as NavConfig
-}
-
-/**
- * 检测当前浏览器是否支持 File System Access API
- */
-export function isFileSystemAccessSupported(): boolean {
-  return typeof window !== 'undefined' && 'showOpenFilePicker' in window
-}
-
-/**
- * 关联本地已有的 JSON 物理文件 (通过 File System Access API)
- */
-export async function linkLocalConfigFile(): Promise<{ config: NavConfig; fileName: string }> {
-  if (!isFileSystemAccessSupported()) {
-    throw new Error('当前浏览器不支持直接连接本地物理文件，请使用导入/导出功能')
-  }
-
-  // @ts-expect-error File System Access API
-  const [handle] = await window.showOpenFilePicker({
-    types: [
-      {
-        description: 'JSON Navigation Config',
-        accept: { 'application/json': ['.json'] }
-      }
-    ],
-    multiple: false
-  })
-
-  activeFileHandle = handle
-  const file = await handle.getFile()
-  const content = await file.text()
-  const parsed = JSON.parse(content)
-
-  if (!parsed.categories || !Array.isArray(parsed.categories)) {
-    throw new Error('所选文件格式不符合 EasyNavi 配置规范')
-  }
-
-  return { config: parsed, fileName: file.name }
-}
-
-/**
- * 写回已关联的本地物理文件
- */
-export async function syncToLinkedFile(config: NavConfig): Promise<boolean> {
-  if (!activeFileHandle) return false
-  try {
-    const writable = await (activeFileHandle as any).createWritable()
-    await writable.write(JSON.stringify(config, null, 2))
-    await writable.close()
-    return true
-  } catch (e) {
-    console.error('写回本地物理文件失败:', e)
-    return false
-  }
-}
-
-/**
- * 获取当前已关联的文件名
- */
-export async function getActiveLinkedFileName(): Promise<string | null> {
-  if (!activeFileHandle) return null
-  try {
-    const file = await activeFileHandle.getFile()
-    return file.name
-  } catch {
-    return null
-  }
 }

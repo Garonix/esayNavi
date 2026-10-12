@@ -7,8 +7,6 @@ import {
   saveConfigToLocal, 
   exportConfigFile, 
   importConfigFile, 
-  linkLocalConfigFile, 
-  syncToLinkedFile,
   DEFAULT_CONFIG 
 } from './services/storage'
 import { extractSiteTitle, getFaviconUrl, normalizeUrl } from './utils/urlHelper'
@@ -35,7 +33,6 @@ import {
 
 const config = ref<NavConfig>({ ...DEFAULT_CONFIG })
 const isLoaded = ref(false)
-const linkedFileName = ref<string | null>(null)
 
 const searchQuery = ref('')
 const showAddModal = ref(false)
@@ -73,14 +70,8 @@ const showToast = (msg: string) => {
   }, 1800)
 }
 
-const persistChanges = async () => {
+const persistChanges = () => {
   saveConfigToLocal(config.value)
-  if (linkedFileName.value) {
-    const success = await syncToLinkedFile(config.value)
-    if (success) {
-      showToast('已写回')
-    }
-  }
 }
 
 const getFloatingIcon = (item: NavItem) => {
@@ -649,29 +640,6 @@ const handleDeleteCategory = (categoryId: string) => {
   }
 }
 
-const handleConnectFile = async () => {
-  try {
-    const res = await linkLocalConfigFile()
-    config.value = res.config
-    linkedFileName.value = res.fileName
-    saveConfigToLocal(res.config)
-    showToast('已关联')
-  } catch (err: any) {
-    if (err?.name !== 'AbortError') {
-      alert(err.message || '关联失败')
-    }
-  }
-}
-
-const handleSyncFile = async () => {
-  const success = await syncToLinkedFile(config.value)
-  if (success) {
-    showToast('已写回')
-  } else {
-    showToast('写回失败')
-  }
-}
-
 const handleExportFile = () => {
   exportConfigFile(config.value, 'easynavi.json')
   showToast('已导出')
@@ -721,7 +689,6 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
       <!-- 极简聚焦搜索栏 (左右对称对齐) -->
       <Header
         :settings="config.settings"
-        :linked-file-name="linkedFileName"
         v-model:search-query="searchQuery"
         :has-active-card-focus="!!activeFocusedCard"
         :focused-card-title="activeFocusedCard?.title"
@@ -869,12 +836,9 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
     <SettingsModal
       :show="showSettingsModal"
       :config="config"
-      :linked-file-name="linkedFileName"
       @close="showSettingsModal = false"
       @update-settings="handleUpdateSettings"
       @update-full-config="handleUpdateFullConfig"
-      @connect-file="handleConnectFile"
-      @sync-file="handleSyncFile"
       @export-file="handleExportFile"
       @import-file="handleImportFile"
       @reset-default="handleResetDefault"

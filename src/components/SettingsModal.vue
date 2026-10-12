@@ -4,34 +4,30 @@ import {
   X, 
   Download, 
   Upload, 
-  FolderSync, 
-  Check, 
   Image as ImageIcon,
   Sliders,
-  Database,
   Sparkles,
   RotateCcw,
   Cloud,
-  Zap,
-  Loader2
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+  SlidersHorizontal,
+  HardDrive
 } from 'lucide-vue-next'
 import type { NavConfig, NavSettings, BackgroundConfig, BackgroundType, WebDavConfig } from '../types/nav'
-import { isFileSystemAccessSupported } from '../services/storage'
 import { saveLocalMedia } from '../services/mediaStorage'
 import { testWebDavConnection, pullFromWebDav, pushToWebDav } from '../services/webdav'
 
 const props = defineProps<{
   show: boolean
   config: NavConfig
-  linkedFileName: string | null
 }>()
 
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'updateSettings', settings: Partial<NavSettings>): void
   (e: 'updateFullConfig', config: NavConfig): void
-  (e: 'connectFile'): void
-  (e: 'syncFile'): void
   (e: 'exportFile'): void
   (e: 'importFile', file: File): void
   (e: 'resetDefault'): void
@@ -39,9 +35,9 @@ const emit = defineEmits<{
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const mediaInputRef = ref<HTMLInputElement | null>(null)
-const fileApiSupported = isFileSystemAccessSupported()
 
-// WebDAV 表单状态 (纯手动受控，零后台静默同步)
+// WebDAV 状态（默认折叠）
+const isWebdavExpanded = ref(false)
 const webdavUrl = ref('')
 const webdavUsername = ref('')
 const webdavPassword = ref('')
@@ -76,7 +72,7 @@ const saveWebDavConfig = () => {
 
 const handleTestWebDav = async () => {
   if (!webdavUrl.value.trim()) {
-    webdavFeedback.value = { success: false, msg: '请输入 WebDAV 服务器地址' }
+    webdavFeedback.value = { success: false, msg: '请输入服务器地址' }
     return
   }
   isTestingWebdav.value = true
@@ -110,7 +106,7 @@ const handlePullWebDav = async () => {
     }
     const remote = await pullFromWebDav(tempConfig)
     emit('updateFullConfig', remote)
-    webdavFeedback.value = { success: true, msg: '已成功从云端拉取并同步' }
+    webdavFeedback.value = { success: true, msg: '拉取成功' }
   } catch (err: any) {
     webdavFeedback.value = { success: false, msg: err?.message || '拉取失败' }
   } finally {
@@ -132,7 +128,7 @@ const handlePushWebDav = async () => {
     }
     await pushToWebDav(tempConfig, props.config)
     saveWebDavConfig()
-    webdavFeedback.value = { success: true, msg: '已成功写回云端' }
+    webdavFeedback.value = { success: true, msg: '上传成功' }
   } catch (err: any) {
     webdavFeedback.value = { success: false, msg: err?.message || '上传失败' }
   } finally {
@@ -179,10 +175,9 @@ const handleMediaUpload = async (e: Event) => {
   const target = e.target as HTMLInputElement
   if (target.files && target.files[0]) {
     const file = target.files[0]
-    const isVideo = file.type.startsWith('video/')
     const { key, objectUrl } = await saveLocalMedia(file)
     updateBg({
-      type: isVideo ? 'video' : 'image',
+      type: 'image',
       url: objectUrl,
       localKey: key
     })
@@ -208,331 +203,303 @@ const handleMediaUpload = async (e: Event) => {
       >
         <div 
           @click.stop
-          class="bg-white/95 w-full max-w-md rounded-2xl p-6 shadow-2xl border border-slate-200/90 relative max-h-[90vh] overflow-y-auto transform transition-all duration-200"
+          class="bg-white/95 w-full max-w-sm rounded-2xl p-5 shadow-2xl border border-slate-200/90 relative max-h-[90vh] overflow-y-auto transform transition-all duration-200"
         >
-        <!-- 头部 -->
-        <div class="flex items-center justify-between mb-5 pb-3 border-b border-slate-100">
-          <div class="flex items-center gap-2">
-            <div class="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
-              <Sliders class="w-4 h-4" />
+          <!-- 头部 -->
+          <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+            <div class="flex items-center gap-2">
+              <div class="w-6 h-6 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+                <Sliders class="w-3.5 h-3.5" />
+              </div>
+              <h3 class="text-sm font-semibold text-slate-900">设置</h3>
             </div>
-            <h3 class="text-sm font-semibold text-slate-900">设置</h3>
+            <button
+              @click="$emit('close')"
+              class="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            >
+              <X class="w-4 h-4" />
+            </button>
           </div>
-          <button
-            @click="$emit('close')"
-            class="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-          >
-            <X class="w-4 h-4" />
-          </button>
-        </div>
 
-        <div class="space-y-5">
-          <!-- 1. 背景 -->
-          <div class="space-y-3">
-            <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-              <Sparkles class="w-3.5 h-3.5 text-blue-600" />
-              <span>背景</span>
-            </span>
+          <div class="space-y-4">
+            <!-- 1. 背景 -->
+            <div class="space-y-2.5">
+              <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <Sparkles class="w-3.5 h-3.5 text-blue-600" />
+                <span>背景</span>
+              </span>
 
-            <!-- 分段控制器 (支持纯白作为首选默认) -->
-            <div class="grid grid-cols-5 gap-1 p-1 bg-slate-100 rounded-xl">
-              <button
-                v-for="t in [
-                  { id: 'white', label: '纯白' },
-                  { id: 'mesh', label: '流光' },
-                  { id: 'particles', label: '微粒' },
-                  { id: 'image', label: '图片' },
-                  { id: 'video', label: '视频' }
-                ]"
-                :key="t.id"
-                type="button"
-                @click="setBgType(t.id as any)"
-                class="py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
-                :class="bgConfig.type === t.id 
-                  ? 'bg-white text-blue-600 shadow-xs font-semibold' 
-                  : 'text-slate-600 hover:text-slate-900'"
-              >
-                {{ t.label }}
-              </button>
-            </div>
-
-            <!-- 自定义媒体链接与上传 -->
-            <div v-if="bgConfig.type !== 'white' && bgConfig.type !== 'mesh'" class="space-y-2.5 pt-1">
-              <div v-if="bgConfig.type !== 'particles'" class="flex gap-2">
-                <input
-                  :value="bgConfig.url"
-                  @input="updateBg({ url: ($event.target as HTMLInputElement).value, localKey: undefined })"
-                  type="text"
-                  placeholder="链接"
-                  class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white transition-all font-mono"
-                />
+              <!-- 极简三段选择器 -->
+              <div class="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-xl">
                 <button
-                  v-if="bgConfig.type === 'image' || bgConfig.type === 'video'"
+                  v-for="t in [
+                    { id: 'white', label: '纯白' },
+                    { id: 'mesh', label: '流光' },
+                    { id: 'image', label: '图片' }
+                  ]"
+                  :key="t.id"
                   type="button"
-                  @click="mediaInputRef?.click()"
-                  class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 rounded-xl text-xs text-slate-700 font-medium transition-colors flex items-center gap-1 flex-shrink-0"
+                  @click="setBgType(t.id as any)"
+                  class="py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
+                  :class="bgConfig.type === t.id 
+                    ? 'bg-white text-blue-600 shadow-xs font-semibold' 
+                    : 'text-slate-600 hover:text-slate-900'"
                 >
-                  <ImageIcon class="w-3.5 h-3.5 text-slate-500" />
-                  <span>本地</span>
+                  {{ t.label }}
                 </button>
-                <input
-                  ref="mediaInputRef"
-                  type="file"
-                  :accept="bgConfig.type === 'video' ? 'video/*' : 'image/*'"
-                  class="hidden"
-                  @change="handleMediaUpload"
-                />
               </div>
 
-              <!-- 滑块微调群 -->
-              <div class="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <div>
-                  <div class="flex justify-between text-[11px] font-medium text-slate-500 mb-1">
-                    <span>遮罩</span>
-                    <span class="font-mono text-slate-700">{{ bgConfig.opacity }}%</span>
-                  </div>
+              <!-- 图片设置 -->
+              <div v-if="bgConfig.type === 'image'" class="space-y-2 pt-1">
+                <div class="flex gap-2">
                   <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    :value="bgConfig.opacity"
-                    @input="updateBg({ opacity: Number(($event.target as HTMLInputElement).value) })"
-                    class="w-full accent-blue-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                    :value="bgConfig.url"
+                    @input="updateBg({ url: ($event.target as HTMLInputElement).value, localKey: undefined })"
+                    type="text"
+                    placeholder="图片链接"
+                    class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white transition-all font-mono"
+                  />
+                  <button
+                    type="button"
+                    @click="mediaInputRef?.click()"
+                    class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 rounded-xl text-xs text-slate-700 font-medium transition-colors flex items-center gap-1 flex-shrink-0"
+                  >
+                    <ImageIcon class="w-3.5 h-3.5 text-slate-500" />
+                    <span>上传</span>
+                  </button>
+                  <input
+                    ref="mediaInputRef"
+                    type="file"
+                    accept="image/*"
+                    class="hidden"
+                    @change="handleMediaUpload"
                   />
                 </div>
 
-                <div>
-                  <div class="flex justify-between text-[11px] font-medium text-slate-500 mb-1">
-                    <span>模糊</span>
-                    <span class="font-mono text-slate-700">{{ bgConfig.blur }}px</span>
+                <!-- 遮罩与模糊调节 -->
+                <div class="grid grid-cols-2 gap-2.5 p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <div>
+                    <div class="flex justify-between text-[11px] font-medium text-slate-500 mb-1">
+                      <span>遮罩</span>
+                      <span class="font-mono text-slate-700">{{ bgConfig.opacity }}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      :value="bgConfig.opacity"
+                      @input="updateBg({ opacity: Number(($event.target as HTMLInputElement).value) })"
+                      class="w-full accent-blue-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                    />
                   </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="30"
-                    :value="bgConfig.blur"
-                    @input="updateBg({ blur: Number(($event.target as HTMLInputElement).value) })"
-                    class="w-full accent-blue-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
-                  />
+
+                  <div>
+                    <div class="flex justify-between text-[11px] font-medium text-slate-500 mb-1">
+                      <span>模糊</span>
+                      <span class="font-mono text-slate-700">{{ bgConfig.blur }}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="30"
+                      :value="bgConfig.blur"
+                      @input="updateBg({ blur: Number(($event.target as HTMLInputElement).value) })"
+                      class="w-full accent-blue-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                <!-- 视差开关 -->
+                <div class="flex items-center justify-between text-xs text-slate-600 px-1 pt-0.5">
+                  <span>视差</span>
+                  <button
+                    type="button"
+                    @click="updateBg({ parallax: !bgConfig.parallax })"
+                    class="w-8 h-4.5 rounded-full transition-colors relative p-0.5"
+                    :class="bgConfig.parallax ? 'bg-blue-600' : 'bg-slate-200'"
+                  >
+                    <div 
+                      class="w-3.5 h-3.5 rounded-full bg-white shadow-xs transform transition-transform"
+                      :class="bgConfig.parallax ? 'translate-x-3.5' : 'translate-x-0'"
+                    ></div>
+                  </button>
                 </div>
               </div>
+            </div>
 
-              <!-- 视差开关 -->
-              <div class="flex items-center justify-between text-xs text-slate-600 px-1">
-                <span>视差</span>
-                <button
-                  type="button"
-                  @click="updateBg({ parallax: !bgConfig.parallax })"
-                  class="w-8 h-4.5 rounded-full transition-colors relative p-0.5"
-                  :class="bgConfig.parallax ? 'bg-blue-600' : 'bg-slate-200'"
-                >
-                  <div 
-                    class="w-3.5 h-3.5 rounded-full bg-white shadow-xs transform transition-transform"
-                    :class="bgConfig.parallax ? 'translate-x-3.5' : 'translate-x-0'"
-                  ></div>
-                </button>
+            <!-- 2. 偏好 -->
+            <div class="space-y-2 pt-3 border-t border-slate-100">
+              <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <SlidersHorizontal class="w-3.5 h-3.5 text-blue-600" />
+                <span>偏好</span>
+              </span>
+
+              <div class="space-y-2 pt-0.5">
+                <div class="flex items-center justify-between text-xs text-slate-600 px-1">
+                  <span>新标签页打开</span>
+                  <button
+                    @click="$emit('updateSettings', { openInNewTab: !config.settings.openInNewTab })"
+                    class="w-8 h-4.5 rounded-full transition-colors relative p-0.5"
+                    :class="config.settings.openInNewTab ? 'bg-blue-600' : 'bg-slate-200'"
+                  >
+                    <div 
+                      class="w-3.5 h-3.5 rounded-full bg-white shadow-xs transform transition-transform"
+                      :class="config.settings.openInNewTab ? 'translate-x-3.5' : 'translate-x-0'"
+                    ></div>
+                  </button>
+                </div>
+
+                <div class="flex items-center justify-between text-xs text-slate-600 px-1">
+                  <span>常用推荐流</span>
+                  <button
+                    @click="$emit('updateSettings', { showFrequentBar: !config.settings.showFrequentBar })"
+                    class="w-8 h-4.5 rounded-full transition-colors relative p-0.5"
+                    :class="config.settings.showFrequentBar ? 'bg-blue-600' : 'bg-slate-200'"
+                  >
+                    <div 
+                      class="w-3.5 h-3.5 rounded-full bg-white shadow-xs transform transition-transform"
+                      :class="config.settings.showFrequentBar ? 'translate-x-3.5' : 'translate-x-0'"
+                    ></div>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- 2. 本地数据与物理文件直连 -->
-          <div class="space-y-3 pt-3 border-t border-slate-100">
-            <div class="flex items-center justify-between">
+            <!-- 3. 数据管理 (去除繁杂不知所云的物理文件概念，只保留核心导入/导出) -->
+            <div class="space-y-2 pt-3 border-t border-slate-100">
               <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                <Database class="w-3.5 h-3.5 text-blue-600" />
-                <span>物理文件</span>
+                <HardDrive class="w-3.5 h-3.5 text-blue-600" />
+                <span>数据</span>
               </span>
-              <span v-if="linkedFileName" class="text-[10px] font-mono text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200/80">
-                已关联
-              </span>
-            </div>
-
-            <div class="grid grid-cols-2 gap-2">
-              <button
-                v-if="fileApiSupported"
-                @click="$emit('connectFile')"
-                class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 border border-slate-200 transition-all active:scale-[0.98]"
-              >
-                <FolderSync class="w-3.5 h-3.5 text-blue-600" />
-                <span>{{ linkedFileName ? '切换' : '关联' }}</span>
-              </button>
-
-              <button
-                v-if="fileApiSupported && linkedFileName"
-                @click="$emit('syncFile')"
-                class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-xs font-medium text-blue-700 border border-blue-200 transition-all active:scale-[0.98]"
-              >
-                <Check class="w-3.5 h-3.5" />
-                <span>写回</span>
-              </button>
-
-              <button
-                @click="$emit('exportFile')"
-                class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 border border-slate-200 transition-all active:scale-[0.98]"
-              >
-                <Download class="w-3.5 h-3.5 text-slate-500" />
-                <span>导出</span>
-              </button>
-
-              <button
-                @click="triggerFileInput"
-                class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 border border-slate-200 transition-all active:scale-[0.98]"
-              >
-                <Upload class="w-3.5 h-3.5 text-slate-500" />
-                <span>导入</span>
-              </button>
-              <input
-                ref="fileInputRef"
-                type="file"
-                accept=".json"
-                class="hidden"
-                @change="handleFileChange"
-              />
-            </div>
-          </div>
-
-          <!-- 3. WebDAV 多端云漫游 (纯手动受控，零后台静默网络请求) -->
-          <div class="space-y-3 pt-3 border-t border-slate-100">
-            <div class="flex items-center justify-between">
-              <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-                <Cloud class="w-3.5 h-3.5 text-blue-600" />
-                <span>WebDAV 云端漫游</span>
-              </span>
-              <span v-if="config.settings.webdav?.enabled" class="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/80">
-                已配置
-              </span>
-            </div>
-
-            <div class="space-y-2 p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs">
-              <div>
-                <label class="block text-[11px] font-medium text-slate-600 mb-1">服务器 URL (支持 AList / 坚果云)</label>
-                <input
-                  v-model="webdavUrl"
-                  @change="saveWebDavConfig"
-                  type="text"
-                  placeholder="如 https://alist.lan/dav/easynavi/"
-                  class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 font-mono"
-                />
-              </div>
 
               <div class="grid grid-cols-2 gap-2">
+                <button
+                  @click="$emit('exportFile')"
+                  class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 border border-slate-200 transition-all active:scale-[0.98]"
+                >
+                  <Download class="w-3.5 h-3.5 text-slate-500" />
+                  <span>导出配置</span>
+                </button>
+
+                <button
+                  @click="triggerFileInput"
+                  class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 border border-slate-200 transition-all active:scale-[0.98]"
+                >
+                  <Upload class="w-3.5 h-3.5 text-slate-500" />
+                  <span>导入配置</span>
+                </button>
+                <input
+                  ref="fileInputRef"
+                  type="file"
+                  accept=".json"
+                  class="hidden"
+                  @change="handleFileChange"
+                />
+              </div>
+            </div>
+
+            <!-- 4. WebDAV (默认折叠) -->
+            <div class="pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                @click="isWebdavExpanded = !isWebdavExpanded"
+                class="w-full flex items-center justify-between text-xs font-semibold text-slate-700 hover:text-slate-900 transition-colors py-1 px-0.5"
+              >
+                <div class="flex items-center gap-1.5">
+                  <Cloud class="w-3.5 h-3.5 text-blue-600" />
+                  <span>WebDAV</span>
+                  <span v-if="config.settings.webdav?.enabled" class="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.2 rounded-full border border-emerald-200/80">
+                    已配置
+                  </span>
+                </div>
+                <component :is="isWebdavExpanded ? ChevronUp : ChevronDown" class="w-3.5 h-3.5 text-slate-400" />
+              </button>
+
+              <div v-if="isWebdavExpanded" class="space-y-2 p-2.5 mt-2 bg-slate-50 rounded-xl border border-slate-100 text-xs">
                 <div>
-                  <label class="block text-[11px] font-medium text-slate-600 mb-1">用户名</label>
+                  <label class="block text-[11px] font-medium text-slate-600 mb-1">服务器</label>
                   <input
-                    v-model="webdavUsername"
+                    v-model="webdavUrl"
                     @change="saveWebDavConfig"
                     type="text"
-                    placeholder="可选"
-                    class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <div>
-                  <label class="block text-[11px] font-medium text-slate-600 mb-1">密码 / Token</label>
-                  <input
-                    v-model="webdavPassword"
-                    @change="saveWebDavConfig"
-                    type="password"
-                    placeholder="可选"
+                    placeholder="https://..."
                     class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 font-mono"
                   />
                 </div>
-              </div>
 
-              <!-- 动作按钮群 -->
-              <div class="flex items-center gap-1.5 pt-2 border-t border-slate-200/60">
-                <button
-                  type="button"
-                  :disabled="isTestingWebdav"
-                  @click="handleTestWebDav"
-                  class="flex-1 py-1 px-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-[11px] font-medium text-slate-700 transition-colors flex items-center justify-center gap-1 active:scale-95 disabled:opacity-60"
-                >
-                  <Loader2 v-if="isTestingWebdav" class="w-3 h-3 animate-spin text-blue-600" />
-                  <span>测试连接</span>
-                </button>
-                <button
-                  type="button"
-                  :disabled="isPullingWebdav"
-                  @click="handlePullWebDav"
-                  class="flex-1 py-1 px-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-medium transition-colors flex items-center justify-center gap-1 active:scale-95 disabled:opacity-60"
-                >
-                  <Loader2 v-if="isPullingWebdav" class="w-3 h-3 animate-spin text-blue-600" />
-                  <span>拉取云端</span>
-                </button>
-                <button
-                  type="button"
-                  :disabled="isPushingWebdav"
-                  @click="handlePushWebDav"
-                  class="flex-1 py-1 px-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium transition-colors flex items-center justify-center gap-1 active:scale-95 disabled:opacity-60"
-                >
-                  <Loader2 v-if="isPushingWebdav" class="w-3 h-3 animate-spin text-white" />
-                  <span>上传云端</span>
-                </button>
-              </div>
-
-              <!-- 反馈提示 -->
-              <div v-if="webdavFeedback" class="text-[11px] pt-1" :class="webdavFeedback.success ? 'text-emerald-600' : 'text-rose-500'">
-                {{ webdavFeedback.msg }}
-              </div>
-            </div>
-          </div>
-
-          <!-- 4. 习惯复利与通用行为 -->
-          <div class="space-y-3 pt-3 border-t border-slate-100">
-            <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-              <Zap class="w-3.5 h-3.5 text-blue-600" />
-              <span>习惯与行为</span>
-            </span>
-
-            <div class="space-y-2">
-              <!-- 智能常用置顶流 -->
-              <div class="flex items-center justify-between text-xs text-slate-600 px-1">
-                <div class="flex items-center gap-1.5">
-                  <Zap class="w-3.5 h-3.5 text-slate-400" />
-                  <span>常用高频推荐流 (点击加权)</span>
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[11px] font-medium text-slate-600 mb-1">用户名</label>
+                    <input
+                      v-model="webdavUsername"
+                      @change="saveWebDavConfig"
+                      type="text"
+                      placeholder="用户名"
+                      class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-medium text-slate-600 mb-1">密码</label>
+                    <input
+                      v-model="webdavPassword"
+                      @change="saveWebDavConfig"
+                      type="password"
+                      placeholder="密码"
+                      class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 font-mono"
+                    />
+                  </div>
                 </div>
-                <button
-                  @click="$emit('updateSettings', { showFrequentBar: !config.settings.showFrequentBar })"
-                  class="w-8 h-4.5 rounded-full transition-colors relative p-0.5"
-                  :class="config.settings.showFrequentBar ? 'bg-blue-600' : 'bg-slate-200'"
-                >
-                  <div 
-                    class="w-3.5 h-3.5 rounded-full bg-white shadow-xs transform transition-transform"
-                    :class="config.settings.showFrequentBar ? 'translate-x-3.5' : 'translate-x-0'"
-                  ></div>
-                </button>
-              </div>
 
-              <!-- 新标签页 -->
-              <div class="flex items-center justify-between text-xs text-slate-600 px-1">
-                <span>在新标签页打开站点</span>
-                <button
-                  @click="$emit('updateSettings', { openInNewTab: !config.settings.openInNewTab })"
-                  class="w-8 h-4.5 rounded-full transition-colors relative p-0.5"
-                  :class="config.settings.openInNewTab ? 'bg-blue-600' : 'bg-slate-200'"
-                >
-                  <div 
-                    class="w-3.5 h-3.5 rounded-full bg-white shadow-xs transform transition-transform"
-                    :class="config.settings.openInNewTab ? 'translate-x-3.5' : 'translate-x-0'"
-                  ></div>
-                </button>
+                <div class="flex items-center gap-1.5 pt-1.5 border-t border-slate-200/60">
+                  <button
+                    type="button"
+                    :disabled="isTestingWebdav"
+                    @click="handleTestWebDav"
+                    class="flex-1 py-1 px-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-[11px] font-medium text-slate-700 transition-colors flex items-center justify-center gap-1 active:scale-95 disabled:opacity-60"
+                  >
+                    <Loader2 v-if="isTestingWebdav" class="w-3 h-3 animate-spin text-blue-600" />
+                    <span>测试</span>
+                  </button>
+                  <button
+                    type="button"
+                    :disabled="isPullingWebdav"
+                    @click="handlePullWebDav"
+                    class="flex-1 py-1 px-2 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-medium transition-colors flex items-center justify-center gap-1 active:scale-95 disabled:opacity-60"
+                  >
+                    <Loader2 v-if="isPullingWebdav" class="w-3 h-3 animate-spin text-blue-600" />
+                    <span>拉取</span>
+                  </button>
+                  <button
+                    type="button"
+                    :disabled="isPushingWebdav"
+                    @click="handlePushWebDav"
+                    class="flex-1 py-1 px-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium transition-colors flex items-center justify-center gap-1 active:scale-95 disabled:opacity-60"
+                  >
+                    <Loader2 v-if="isPushingWebdav" class="w-3 h-3 animate-spin text-white" />
+                    <span>上传</span>
+                  </button>
+                </div>
+
+                <div v-if="webdavFeedback" class="text-[11px] pt-0.5" :class="webdavFeedback.success ? 'text-emerald-600' : 'text-rose-500'">
+                  {{ webdavFeedback.msg }}
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- 5. 重置 -->
-          <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
-            <span class="text-[11px] text-slate-400">EasyNavi v{{ config.version }}</span>
-            <button
-              @click="$emit('resetDefault')"
-              class="flex items-center gap-1 text-xs text-rose-500 hover:text-rose-600 transition-colors"
-            >
-              <RotateCcw class="w-3 h-3" />
-              <span>重置</span>
-            </button>
+            <!-- 5. 底部版本与重置 -->
+            <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
+              <span class="text-[11px] text-slate-400">EasyNavi v{{ config.version }}</span>
+              <button
+                @click="$emit('resetDefault')"
+                class="flex items-center gap-1 text-xs text-rose-500 hover:text-rose-600 transition-colors"
+              >
+                <RotateCcw class="w-3 h-3" />
+                <span>恢复默认</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  </transition>
+    </transition>
   </teleport>
 </template>

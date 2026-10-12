@@ -18,7 +18,7 @@ export interface NavCategory {
   items: NavItem[]
 }
 
-export type BackgroundType = 'white' | 'mesh' | 'particles' | 'image' | 'video'
+export type BackgroundType = 'white' | 'mesh' | 'image'
 
 export interface BackgroundConfig {
   type: BackgroundType
