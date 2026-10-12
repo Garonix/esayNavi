@@ -22,7 +22,7 @@ import EditCategoryModal from './components/EditCategoryModal.vue'
 import BackgroundLayer from './components/BackgroundLayer.vue'
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal.vue'
 import ContextMenu from './components/ContextMenu.vue'
-import JsonEditorModal from './components/JsonEditorModal.vue'
+import TableEditorModal from './components/TableEditorModal.vue'
 import { 
   getDraggedCard, 
   clearDragState,
@@ -40,7 +40,7 @@ const showAddModal = ref(false)
 const showSettingsModal = ref(false)
 const showCategoryModal = ref(false)
 const showShortcutsModal = ref(false)
-const showJsonEditorModal = ref(false)
+const showTableEditorModal = ref(false)
 
 // 右键上下文菜单状态
 const contextMenuState = ref({
@@ -201,7 +201,7 @@ const isZenMode = ref(false)
 
 // 全局活跃模态框状态判定
 const hasActiveModal = computed(() => {
-  return showAddModal.value || showSettingsModal.value || showCategoryModal.value || showShortcutsModal.value || showJsonEditorModal.value
+  return showAddModal.value || showSettingsModal.value || showCategoryModal.value || showShortcutsModal.value || showTableEditorModal.value
 })
 
 // 模态框打开时自动锁定页面背景滚动，关闭后无缝还原
@@ -218,8 +218,8 @@ const handleGlobalKeydown = (e: KeyboardEvent) => {
   // 1. 若当前存在打开的模态框：严格锁定操作区域，除 Escape 键外禁止响应任何背景快捷键
   if (hasActiveModal.value) {
     if (e.key === 'Escape') {
-      if (showJsonEditorModal.value) {
-        showJsonEditorModal.value = false
+      if (showTableEditorModal.value) {
+        showTableEditorModal.value = false
       } else if (showShortcutsModal.value) {
         showShortcutsModal.value = false
       } else if (showAddModal.value) {
@@ -258,7 +258,7 @@ const handleGlobalKeydown = (e: KeyboardEvent) => {
     openAddModal()
   } else if (e.key === 'j' || e.key === 'J') {
     e.preventDefault()
-    showJsonEditorModal.value = true
+    showTableEditorModal.value = true
   } else if (e.key === '/') {
     e.preventDefault()
     const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement
@@ -848,14 +848,14 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
       @update-full-config="handleUpdateFullConfig"
       @export-file="handleExportFile"
       @import-file="handleImportFile"
-      @open-json-editor="showJsonEditorModal = true"
+      @open-table-editor="showTableEditorModal = true"
       @reset-default="handleResetDefault"
     />
 
-    <JsonEditorModal
-      :show="showJsonEditorModal"
+    <TableEditorModal
+      :show="showTableEditorModal"
       :config="config"
-      @close="showJsonEditorModal = false"
+      @close="showTableEditorModal = false"
       @save="handleUpdateFullConfig"
     />
 
