@@ -47,9 +47,22 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const activeDropdownRowId = ref<string | null>(null)
 const newCategoryInput = ref('')
 
+// 分类删除相关状态与警告
+const categoryPendingDelete = ref<string | null>(null)
+const categoryDeleteWarning = ref<string | null>(null)
+let warningTimer: ReturnType<typeof setTimeout> | null = null
+let dropdownBlurTimer: ReturnType<typeof setTimeout> | null = null
+
+// 站点行多选与批量操作
+const selectedRowIds = ref<Set<string>>(new Set())
+const batchCategoryDropdownOpen = ref(false)
+
 const handleGlobalClick = () => {
   activeDropdownRowId.value = null
   newCategoryInput.value = ''
+  batchCategoryDropdownOpen.value = false
+  categoryPendingDelete.value = null
+  categoryDeleteWarning.value = null
 }
 
 onMounted(() => {
@@ -58,23 +71,87 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('click', handleGlobalClick)
+  if (warningTimer) clearTimeout(warningTimer)
+  if (dropdownBlurTimer) clearTimeout(dropdownBlurTimer)
 })
+
+const showCategoryWarning = (msg: string) => {
+  categoryDeleteWarning.value = msg
+  if (warningTimer) clearTimeout(warningTimer)
+  warningTimer = setTimeout(() => {
+    categoryDeleteWarning.value = null
+  }, 2500)
+}
 
 const toggleDropdown = (rowId: string, e: MouseEvent) => {
   e.stopPropagation()
+  batchCategoryDropdownOpen.value = false
   if (activeDropdownRowId.value === rowId) {
     activeDropdownRowId.value = null
     newCategoryInput.value = ''
+    categoryPendingDelete.value = null
+    categoryDeleteWarning.value = null
   } else {
     activeDropdownRowId.value = rowId
     newCategoryInput.value = ''
+    categoryPendingDelete.value = null
+    categoryDeleteWarning.value = null
   }
+}
+
+// 分类单元格失焦自动关闭（利用 FocusEvent 检测焦点是否真正离开单元格）
+const handleCategoryCellFocusOut = (rowId: string, e: FocusEvent) => {
+  const currentTarget = e.currentTarget as HTMLElement | null
+  const relatedTarget = e.relatedTarget as HTMLElement | null
+
+  // 若焦点移向了本单元格内部的输入框或按钮，不关闭
+  if (currentTarget && relatedTarget && currentTarget.contains(relatedTarget)) {
+    return
+  }
+
+  if (dropdownBlurTimer) clearTimeout(dropdownBlurTimer)
+  dropdownBlurTimer = setTimeout(() => {
+    if (activeDropdownRowId.value === rowId) {
+      if (currentTarget && document.activeElement && currentTarget.contains(document.activeElement)) {
+        return
+      }
+      activeDropdownRowId.value = null
+      newCategoryInput.value = ''
+      categoryPendingDelete.value = null
+      categoryDeleteWarning.value = null
+    }
+  }, 160)
 }
 
 const selectCategory = (row: TableRow, name: string) => {
   row.categoryName = name
   activeDropdownRowId.value = null
   newCategoryInput.value = ''
+  categoryPendingDelete.value = null
+  categoryDeleteWarning.value = null
+}
+
+// 删除分类操作（若占用则提示禁止，若未占用需二次确认）
+const handleDeleteCategoryClick = (catName: string, e: MouseEvent) => {
+  e.stopPropagation()
+  const isUsedByAnyRow = rows.value.some(r => r.categoryName.trim() === catName)
+  if (isUsedByAnyRow) {
+    showCategoryWarning(`「${catName}」下已有站点，不允许删除`)
+    categoryPendingDelete.value = null
+    return
+  }
+
+  if (categoryPendingDelete.value === catName) {
+    // 二次确认，真正执行删除
+    existingCategoryNames.value = existingCategoryNames.value.filter(n => n !== catName)
+    existingCategoryMap.value.delete(catName)
+    categoryPendingDelete.value = null
+    categoryDeleteWarning.value = null
+  } else {
+    // 首次点击，进入二次确认态
+    categoryPendingDelete.value = catName
+    categoryDeleteWarning.value = null
+  }
 }
 
 // 在空白新增位失焦或回车后自动创建新分类
@@ -102,6 +179,8 @@ const handleCreateCategoryOnBlur = (row: TableRow) => {
 
   newCategoryInput.value = ''
   activeDropdownRowId.value = null
+  categoryPendingDelete.value = null
+  categoryDeleteWarning.value = null
 }
 
 // 检查是否存在未填写完整名称或网址的行
@@ -142,6 +221,10 @@ watch(
       rows.value = list
       existingCategoryMap.value = catMap
       existingCategoryNames.value = catNames
+      selectedRowIds.value.clear()
+      batchCategoryDropdownOpen.value = false
+      categoryPendingDelete.value = null
+      categoryDeleteWarning.value = null
     }
   }
 )
@@ -156,6 +239,58 @@ const filteredRows = computed(() => {
     r.categoryName.toLowerCase().includes(query)
   )
 })
+
+// 多选与批量操作
+const isAllFilteredSelected = computed(() => {
+  if (filteredRows.value.length === 0) return false
+  return filteredRows.value.every(r => selectedRowIds.value.has(r.id))
+})
+
+const isIndeterminate = computed(() => {
+  if (selectedRowIds.value.size === 0) return false
+  return !isAllFilteredSelected.value && filteredRows.value.some(r => selectedRowIds.value.has(r.id))
+})
+
+const toggleSelectAll = () => {
+  if (isAllFilteredSelected.value) {
+    for (const r of filteredRows.value) {
+      selectedRowIds.value.delete(r.id)
+    }
+  } else {
+    for (const r of filteredRows.value) {
+      selectedRowIds.value.add(r.id)
+    }
+  }
+}
+
+const toggleSelectRow = (rowId: string) => {
+  if (selectedRowIds.value.has(rowId)) {
+    selectedRowIds.value.delete(rowId)
+  } else {
+    selectedRowIds.value.add(rowId)
+  }
+}
+
+const clearSelection = () => {
+  selectedRowIds.value.clear()
+}
+
+// 批量删除已选站点
+const handleBatchDelete = () => {
+  if (selectedRowIds.value.size === 0) return
+  rows.value = rows.value.filter(r => !selectedRowIds.value.has(r.id))
+  selectedRowIds.value.clear()
+}
+
+// 批量修改已选站点的分类
+const handleBatchSetCategory = (catName: string) => {
+  for (const r of rows.value) {
+    if (selectedRowIds.value.has(r.id)) {
+      r.categoryName = catName
+    }
+  }
+  batchCategoryDropdownOpen.value = false
+}
 
 // 统计信息
 const stats = computed(() => {
@@ -188,6 +323,7 @@ const handleAddRow = () => {
 // 删除某行
 const handleDeleteRow = (targetId: string) => {
   rows.value = rows.value.filter(r => r.id !== targetId)
+  selectedRowIds.value.delete(targetId)
 }
 
 // 触发图片上传
@@ -356,13 +492,88 @@ const handleSave = () => {
             @change="handleFileChange"
           />
 
+          <!-- 批量操作工具栏（当勾选一行或多行时显式出现） -->
+          <transition
+            enter-active-class="transition duration-150 ease-out"
+            enter-from-class="opacity-0 -translate-y-1 scale-[0.99]"
+            enter-to-class="opacity-100 translate-y-0 scale-100"
+            leave-active-class="transition duration-100 ease-in"
+            leave-from-class="opacity-100 translate-y-0 scale-100"
+            leave-to-class="opacity-0 -translate-y-1 scale-[0.99]"
+          >
+            <div 
+              v-if="selectedRowIds.size > 0"
+              class="mt-2.5 px-3 py-1.5 bg-blue-50/90 border border-blue-200/80 rounded-xl flex items-center justify-between text-xs text-blue-900 select-none shadow-2xs"
+            >
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-blue-950">已选择 {{ selectedRowIds.size }} 项</span>
+                <span class="text-blue-300">|</span>
+                <button 
+                  type="button" 
+                  @click="clearSelection" 
+                  class="text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
+                >
+                  取消选择
+                </button>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <!-- 批量修改分类下拉菜单 -->
+                <div class="relative">
+                  <button
+                    type="button"
+                    @click.stop="batchCategoryDropdownOpen = !batchCategoryDropdownOpen"
+                    class="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-slate-50 border border-blue-200 text-blue-700 rounded-lg font-medium transition-colors cursor-pointer shadow-2xs"
+                  >
+                    <span>修改分类</span>
+                    <ChevronDown class="w-3 h-3 transition-transform" :class="batchCategoryDropdownOpen ? 'rotate-180' : ''" />
+                  </button>
+
+                  <div
+                    v-if="batchCategoryDropdownOpen"
+                    @click.stop
+                    class="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-xl border border-slate-200 py-1 z-40 max-h-48 overflow-y-auto"
+                  >
+                    <div
+                      v-for="catName in existingCategoryNames"
+                      :key="catName"
+                      @click="handleBatchSetCategory(catName)"
+                      class="px-3 py-1.5 hover:bg-blue-50 hover:text-blue-600 cursor-pointer flex items-center justify-between text-slate-700 text-xs"
+                    >
+                      <span class="truncate">{{ catName }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 批量删除按钮 -->
+                <button
+                  type="button"
+                  @click="handleBatchDelete"
+                  class="flex items-center gap-1 px-2.5 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 rounded-lg font-medium transition-colors cursor-pointer shadow-2xs"
+                >
+                  <Trash2 class="w-3.5 h-3.5" />
+                  <span>批量删除</span>
+                </button>
+              </div>
+            </div>
+          </transition>
+
           <!-- 表格主体工作区 -->
           <div class="flex-1 my-3 overflow-auto border border-slate-200/90 rounded-xl bg-white shadow-2xs">
             <table class="w-full border-collapse text-left text-xs">
               <!-- 表头 -->
               <thead class="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200 text-slate-600 font-semibold select-none">
                 <tr>
-                  <th class="py-2.5 px-3 w-10 text-center">置顶</th>
+                  <th class="py-2.5 px-3 w-8 text-center">
+                    <input 
+                      type="checkbox" 
+                      :checked="isAllFilteredSelected"
+                      :indeterminate.prop="isIndeterminate"
+                      @change="toggleSelectAll"
+                      class="rounded border-slate-300 text-blue-600 focus:ring-0 cursor-pointer"
+                    />
+                  </th>
+                  <th class="py-2.5 px-2 w-10 text-center">置顶</th>
                   <th class="py-2.5 px-3 w-40">名称</th>
                   <th class="py-2.5 px-3 min-w-[200px]">网址</th>
                   <th class="py-2.5 px-3 w-48">分类</th>
@@ -376,8 +587,19 @@ const handleSave = () => {
                 <tr 
                   v-for="row in filteredRows" 
                   :key="row.id"
-                  class="hover:bg-slate-50/80 transition-colors group"
+                  class="transition-colors group"
+                  :class="selectedRowIds.has(row.id) ? 'bg-blue-50/40 hover:bg-blue-50/60' : 'hover:bg-slate-50/80'"
                 >
+                  <!-- 0. 多选复选框 -->
+                  <td class="py-1.5 px-3 text-center" @click.stop>
+                    <input 
+                      type="checkbox" 
+                      :checked="selectedRowIds.has(row.id)"
+                      @change="toggleSelectRow(row.id)"
+                      class="rounded border-slate-300 text-blue-600 focus:ring-0 cursor-pointer"
+                    />
+                  </td>
+
                   <!-- 1. 置顶状态 -->
                   <td class="py-1.5 px-2 text-center">
                     <button
@@ -414,8 +636,8 @@ const handleSave = () => {
                     />
                   </td>
 
-                  <!-- 4. 分类 (带空白新增位下拉框) -->
-                  <td class="py-1.5 px-2 relative">
+                  <!-- 4. 分类 (带空白新增位下拉框，失焦自动关闭，支持分类删除与防误删校验) -->
+                  <td class="py-1.5 px-2 relative" @focusout="handleCategoryCellFocusOut(row.id, $event)">
                     <div class="relative flex items-center">
                       <input
                         v-model="row.categoryName"
@@ -443,6 +665,15 @@ const handleSave = () => {
                       @click.stop
                       class="absolute top-full left-2 right-2 mt-1 z-30 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden select-none ring-1 ring-black/5"
                     >
+                      <!-- 警告提示条：当尝试删除带有站点的分类时展现 -->
+                      <div 
+                        v-if="categoryDeleteWarning"
+                        class="px-2.5 py-1.5 bg-rose-50 border-b border-rose-100 text-[11px] text-rose-600 flex items-center gap-1.5 font-medium animate-pulse"
+                      >
+                        <AlertCircle class="w-3.5 h-3.5 flex-shrink-0" />
+                        <span class="truncate">{{ categoryDeleteWarning }}</span>
+                      </div>
+
                       <!-- 专属空白新增位 -->
                       <div class="p-1.5 border-b border-slate-100 flex items-center gap-1.5 bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm">
                         <Plus class="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
@@ -463,11 +694,35 @@ const handleSave = () => {
                           v-for="catName in existingCategoryNames"
                           :key="catName"
                           @click="selectCategory(row, catName)"
-                          class="px-2.5 py-1.5 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer flex items-center justify-between transition-colors"
+                          class="px-2.5 py-1.5 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer flex items-center justify-between transition-colors group/cat"
                           :class="row.categoryName.trim() === catName ? 'bg-slate-50 font-medium text-blue-600' : ''"
                         >
-                          <span>{{ catName }}</span>
-                          <Check v-if="row.categoryName.trim() === catName" class="w-3 h-3 text-blue-600" />
+                          <div class="flex items-center gap-1.5 truncate mr-1">
+                            <span class="truncate">{{ catName }}</span>
+                            <Check v-if="row.categoryName.trim() === catName" class="w-3 h-3 text-blue-600 flex-shrink-0" />
+                          </div>
+
+                          <!-- 删除分类按钮与二次确认 -->
+                          <div class="flex items-center flex-shrink-0" @click.stop>
+                            <button
+                              v-if="categoryPendingDelete === catName"
+                              type="button"
+                              @click="handleDeleteCategoryClick(catName, $event)"
+                              class="px-1.5 py-0.5 text-[10px] bg-rose-500 text-white rounded hover:bg-rose-600 font-medium transition-colors"
+                              title="点击确认删除分类"
+                            >
+                              确认删除
+                            </button>
+                            <button
+                              v-else
+                              type="button"
+                              @click="handleDeleteCategoryClick(catName, $event)"
+                              class="p-0.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded transition-colors opacity-0 group-hover/cat:opacity-100"
+                              title="删除分类"
+                            >
+                              <X class="w-3 h-3" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -520,7 +775,7 @@ const handleSave = () => {
                 </tr>
 
                 <tr v-if="filteredRows.length === 0">
-                  <td colspan="6" class="py-12 text-center text-slate-400 text-xs">
+                  <td colspan="7" class="py-12 text-center text-slate-400 text-xs">
                     无匹配数据
                   </td>
                 </tr>
