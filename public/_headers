@@ -1,0 +1,25 @@
+# Cloudflare Pages 边缘缓存与安全标头配置
+
+# 全局默认基础安全标头
+/*
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# Service Worker 必须禁用强缓存，确保每次访问都能感知到最新版本
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+# 页面入口与配置文件优先校验最新内容
+/index.html
+  Cache-Control: no-cache, must-revalidate
+
+/nav.json
+  Cache-Control: no-cache, must-revalidate
+
+/manifest.webmanifest
+  Cache-Control: no-cache, must-revalidate
+
+# 带内容 Hash 的静态资源启用长期强缓存 (1 年)
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
