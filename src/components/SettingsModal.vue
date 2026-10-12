@@ -405,7 +405,7 @@ const handleMediaUpload = async (e: Event) => {
                   class="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 border border-slate-200 transition-all active:scale-[0.98]"
                 >
                   <Table class="w-3.5 h-3.5 text-blue-600" />
-                  <span>批量表格管理</span>
+                  <span>站点管理</span>
                 </button>
               </div>
             </div>

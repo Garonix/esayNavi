@@ -15,7 +15,7 @@ const shortcuts = [
   { key: 'Enter', name: '直达选定' },
   { key: 'g / b / gh', name: 'Bang 直达' },
   { key: 'N', name: '添加站点' },
-  { key: 'J', name: '批量管理' },
+  { key: 'J', name: '站点管理' },
   { key: 'Space', name: '沉浸视窗' },
   { key: '右键', name: '快捷菜单' },
   { key: '?', name: '帮助指南' },

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { 
   X, 
   Table, 
@@ -8,7 +8,9 @@ import {
   Pin, 
   Upload, 
   Search, 
-  CheckCircle2
+  CheckCircle2,
+  ChevronDown,
+  Check
 } from 'lucide-vue-next'
 import type { NavConfig, NavCategory, NavItem } from '../types/nav'
 import { normalizeToCompactIcon } from '../utils/imageHelper'
@@ -41,12 +43,42 @@ const existingCategoryNames = ref<string[]>([])
 const activeUploadRowIndex = ref<number | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
+// 当前激活展开下拉菜单的行 ID
+const activeDropdownRowId = ref<string | null>(null)
+
+const handleGlobalClick = () => {
+  activeDropdownRowId.value = null
+}
+
+onMounted(() => {
+  window.addEventListener('click', handleGlobalClick)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('click', handleGlobalClick)
+})
+
+const toggleDropdown = (rowId: string, e: MouseEvent) => {
+  e.stopPropagation()
+  if (activeDropdownRowId.value === rowId) {
+    activeDropdownRowId.value = null
+  } else {
+    activeDropdownRowId.value = rowId
+  }
+}
+
+const selectCategory = (row: TableRow, name: string) => {
+  row.categoryName = name
+  activeDropdownRowId.value = null
+}
+
 // 初始化表格数据
 watch(
   () => props.show,
   (val) => {
     if (val) {
       searchFilter.value = ''
+      activeDropdownRowId.value = null
       const list: TableRow[] = []
       const catMap = new Map<string, { id: string; icon?: string }>()
       const catNames: string[] = []
@@ -101,7 +133,7 @@ const stats = computed(() => {
 
 // 新增一行站点
 const handleAddRow = () => {
-  const defaultCategory = existingCategoryNames.value[0] || '默认分类'
+  const defaultCategory = existingCategoryNames.value[0] || '常用应用'
   const newRow: TableRow = {
     id: `item-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
     title: '',
@@ -155,14 +187,11 @@ const handleUrlBlur = (row: TableRow) => {
 
 // 保存并转化回 NavConfig 结构
 const handleSave = () => {
-  // 1. 过滤掉完全无意义的空行
   const validRows = rows.value.filter(r => r.url.trim() || r.title.trim())
 
-  // 2. 按分类名称聚合
   const categoryOrder: string[] = []
   const groupedItems = new Map<string, TableRow[]>()
 
-  // 保持原有分类顺序优先
   for (const catName of existingCategoryNames.value) {
     categoryOrder.push(catName)
     groupedItems.set(catName, [])
@@ -177,11 +206,9 @@ const handleSave = () => {
     groupedItems.get(catName)!.push(row)
   }
 
-  // 3. 构建新的分类列表
   const newCategories: NavCategory[] = []
   for (const catName of categoryOrder) {
     const itemsInCat = groupedItems.get(catName) || []
-    // 如果该分类下有卡片，或者它是原本就存在分类，则予以保留
     if (itemsInCat.length > 0 || existingCategoryMap.value.has(catName)) {
       const existingMeta = existingCategoryMap.value.get(catName)
       const catId = existingMeta?.id || `cat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
@@ -240,22 +267,20 @@ const handleSave = () => {
               <div class="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
                 <Table class="w-4 h-4" />
               </div>
-              <h3 class="text-sm font-semibold text-slate-900">批量表格管理</h3>
+              <h3 class="text-sm font-semibold text-slate-900">站点管理</h3>
             </div>
 
             <div class="flex items-center gap-2">
-              <!-- 快捷搜索 -->
               <div class="relative w-40 sm:w-56">
                 <Search class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                 <input
                   v-model="searchFilter"
                   type="text"
-                  placeholder="过滤站点..."
+                  placeholder="搜索"
                   class="w-full bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-2.5 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
                 />
               </div>
 
-              <!-- 添加站点按钮 -->
               <button
                 type="button"
                 @click="handleAddRow"
@@ -265,7 +290,6 @@ const handleSave = () => {
                 <span>新增</span>
               </button>
 
-              <!-- 关闭按钮 -->
               <button
                 type="button"
                 @click="$emit('close')"
@@ -275,11 +299,6 @@ const handleSave = () => {
               </button>
             </div>
           </div>
-
-          <!-- 预留的分类 datalist (供所有分类输入框快捷选择已有或直接打字新建) -->
-          <datalist id="category-datalist">
-            <option v-for="name in existingCategoryNames" :key="name" :value="name" />
-          </datalist>
 
           <!-- 隐藏的文件上传输入框 -->
           <input
@@ -293,14 +312,14 @@ const handleSave = () => {
           <!-- 表格主体工作区 (高密度表格，支持独立纵向滚动) -->
           <div class="flex-1 my-3 overflow-auto border border-slate-200/90 rounded-xl bg-white shadow-2xs">
             <table class="w-full border-collapse text-left text-xs">
-              <!-- 表头 -->
-              <thead class="sticky top-0 z-10 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200 text-slate-600 font-semibold select-none">
+              <!-- 表头 (全面降噪：移除所有括号注释与说教) -->
+              <thead class="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200 text-slate-600 font-semibold select-none">
                 <tr>
                   <th class="py-2.5 px-3 w-10 text-center">置顶</th>
                   <th class="py-2.5 px-3 w-40">名称</th>
                   <th class="py-2.5 px-3 min-w-[200px]">网址</th>
-                  <th class="py-2.5 px-3 w-44">分类 (可直接输入新分类)</th>
-                  <th class="py-2.5 px-3 min-w-[200px]">图标 (链接或上传)</th>
+                  <th class="py-2.5 px-3 w-48">分类</th>
+                  <th class="py-2.5 px-3 min-w-[200px]">图标</th>
                   <th class="py-2.5 px-3 w-14 text-center">操作</th>
                 </tr>
               </thead>
@@ -319,7 +338,7 @@ const handleSave = () => {
                       @click="row.pinned = !row.pinned"
                       class="p-1 rounded transition-colors"
                       :class="row.pinned ? 'text-amber-500 bg-amber-50' : 'text-slate-300 hover:text-slate-500'"
-                      title="切换置顶"
+                      title="置顶"
                     >
                       <Pin class="w-3.5 h-3.5 transform" :class="row.pinned ? 'rotate-45' : ''" />
                     </button>
@@ -346,23 +365,51 @@ const handleSave = () => {
                     />
                   </td>
 
-                  <!-- 4. 分类 (可输入任意新分类或下拉选择已有) -->
-                  <td class="py-1.5 px-2">
-                    <div class="relative">
+                  <!-- 4. 分类 (Combobox：完整全量下拉列表 + 自由打字新建) -->
+                  <td class="py-1.5 px-2 relative">
+                    <div class="relative flex items-center">
                       <input
                         v-model="row.categoryName"
-                        list="category-datalist"
                         type="text"
-                        placeholder="分类名称"
-                        class="w-full bg-slate-50/90 hover:bg-slate-100/70 focus:bg-white border border-slate-200/80 focus:border-blue-500 rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none transition-colors"
+                        placeholder="分类"
+                        @click="toggleDropdown(row.id, $event)"
+                        class="w-full bg-slate-50/90 hover:bg-slate-100/70 focus:bg-white border border-slate-200/80 focus:border-blue-500 rounded-lg pl-2 pr-6 py-1 text-xs text-slate-800 focus:outline-none transition-colors cursor-text"
                       />
+                      <button
+                        type="button"
+                        @click="toggleDropdown(row.id, $event)"
+                        class="absolute right-1 p-1 text-slate-400 hover:text-slate-700 transition-colors"
+                        tabindex="-1"
+                      >
+                        <ChevronDown 
+                          class="w-3 h-3 transition-transform duration-150" 
+                          :class="activeDropdownRowId === row.id ? 'rotate-180 text-blue-600' : ''" 
+                        />
+                      </button>
+                    </div>
+
+                    <!-- 专属全部分类绝对定位下拉菜单 (不被 input 现有文字过滤，完整呈现所有分类) -->
+                    <div
+                      v-if="activeDropdownRowId === row.id"
+                      @click.stop
+                      class="absolute top-full left-2 right-2 mt-1 z-30 bg-white rounded-xl shadow-xl border border-slate-200 py-1 max-h-48 overflow-y-auto select-none ring-1 ring-black/5"
+                    >
+                      <div
+                        v-for="catName in existingCategoryNames"
+                        :key="catName"
+                        @click="selectCategory(row, catName)"
+                        class="px-2.5 py-1.5 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer flex items-center justify-between transition-colors"
+                        :class="row.categoryName.trim() === catName ? 'bg-slate-50 font-medium text-blue-600' : ''"
+                      >
+                        <span>{{ catName }}</span>
+                        <Check v-if="row.categoryName.trim() === catName" class="w-3 h-3 text-blue-600" />
+                      </div>
                     </div>
                   </td>
 
                   <!-- 5. 图标 (预览 + 链接输入 + 本地上传按钮) -->
                   <td class="py-1.5 px-2">
                     <div class="flex items-center gap-1.5">
-                      <!-- 图标缩略预览 -->
                       <div class="w-6 h-6 rounded-md bg-slate-100 border border-slate-200/70 flex items-center justify-center flex-shrink-0 overflow-hidden">
                         <img 
                           v-if="row.icon" 
@@ -375,19 +422,17 @@ const handleSave = () => {
                         </span>
                       </div>
 
-                      <!-- 图标 URL 输入框 -->
                       <input
                         v-model="row.icon"
                         type="text"
-                        placeholder="图标 URL 或点击右侧上传"
+                        placeholder="图标链接"
                         class="flex-1 bg-transparent hover:bg-slate-100/60 focus:bg-white border border-transparent hover:border-slate-200 focus:border-blue-500 rounded-lg px-2 py-1 text-xs text-slate-800 font-mono focus:outline-none transition-colors truncate"
                       />
 
-                      <!-- 本地上传触发按钮 -->
                       <button
                         type="button"
                         @click="triggerUpload(row)"
-                        title="上传本地图片作为图标"
+                        title="上传图片"
                         class="p-1 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 border border-slate-200/80 bg-white flex-shrink-0 transition-colors"
                       >
                         <Upload class="w-3.5 h-3.5" />
@@ -401,17 +446,16 @@ const handleSave = () => {
                       type="button"
                       @click="handleDeleteRow(row.id)"
                       class="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                      title="删除该站点"
+                      title="删除"
                     >
                       <Trash2 class="w-3.5 h-3.5" />
                     </button>
                   </td>
                 </tr>
 
-                <!-- 空数据提示 -->
                 <tr v-if="filteredRows.length === 0">
                   <td colspan="6" class="py-12 text-center text-slate-400 text-xs">
-                    未找到相关站点记录，点击右上角「新增」即可添加
+                    无匹配数据
                   </td>
                 </tr>
               </tbody>
@@ -422,7 +466,7 @@ const handleSave = () => {
           <div class="flex items-center justify-between pt-2 border-t border-slate-100 flex-shrink-0">
             <div class="flex items-center gap-1.5 text-xs text-slate-500">
               <CheckCircle2 class="w-3.5 h-3.5 text-blue-500" />
-              <span>共 {{ stats.totalItems }} 个站点 · {{ stats.totalCategories }} 个分类</span>
+              <span>{{ stats.totalItems }} 站点 · {{ stats.totalCategories }} 分类</span>
             </div>
 
             <div class="flex items-center gap-2">
