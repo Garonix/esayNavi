@@ -29,14 +29,6 @@ export interface BackgroundConfig {
   parallax: boolean // 视差滚动
 }
 
-export interface WebDavConfig {
-  enabled: boolean
-  url: string
-  username: string
-  password?: string
-  filename?: string
-}
-
 export interface NavSettings {
   title: string
   theme: 'dark' | 'light' | 'auto'
@@ -47,7 +39,6 @@ export interface NavSettings {
   showClock: boolean
   showSearch: boolean
   showFrequentBar?: boolean // 智能常用置顶流
-  webdav?: WebDavConfig
 }
 
 export interface NavConfig {
