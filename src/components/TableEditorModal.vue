@@ -8,7 +8,7 @@ import {
   Pin, 
   Upload, 
   Search, 
-  CheckCircle2,
+  AlertCircle,
   ChevronDown,
   Check
 } from 'lucide-vue-next'
@@ -43,11 +43,13 @@ const existingCategoryNames = ref<string[]>([])
 const activeUploadRowIndex = ref<number | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
-// 当前激活展开下拉菜单的行 ID
+// 当前展开分类下拉菜单的行 ID 及空白新增输入内容
 const activeDropdownRowId = ref<string | null>(null)
+const newCategoryInput = ref('')
 
 const handleGlobalClick = () => {
   activeDropdownRowId.value = null
+  newCategoryInput.value = ''
 }
 
 onMounted(() => {
@@ -62,15 +64,50 @@ const toggleDropdown = (rowId: string, e: MouseEvent) => {
   e.stopPropagation()
   if (activeDropdownRowId.value === rowId) {
     activeDropdownRowId.value = null
+    newCategoryInput.value = ''
   } else {
     activeDropdownRowId.value = rowId
+    newCategoryInput.value = ''
   }
 }
 
 const selectCategory = (row: TableRow, name: string) => {
   row.categoryName = name
   activeDropdownRowId.value = null
+  newCategoryInput.value = ''
 }
+
+// 在空白新增位失焦或回车后自动创建新分类
+const handleCreateCategoryOnBlur = (row: TableRow) => {
+  const trimmed = newCategoryInput.value.trim()
+  if (!trimmed) return
+
+  // 查重（不区分大小写）
+  const matchedExisting = existingCategoryNames.value.find(
+    name => name.toLowerCase() === trimmed.toLowerCase()
+  )
+
+  if (!matchedExisting) {
+    // 自动新建新分类并加入现有分类列表
+    existingCategoryNames.value.push(trimmed)
+    existingCategoryMap.value.set(trimmed, {
+      id: `cat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      icon: 'folder'
+    })
+    row.categoryName = trimmed
+  } else {
+    // 若重名，自动归入该已有分类，避免重复创建
+    row.categoryName = matchedExisting
+  }
+
+  newCategoryInput.value = ''
+  activeDropdownRowId.value = null
+}
+
+// 检查是否存在未填写完整名称或网址的行
+const hasIncompleteRows = computed(() => {
+  return rows.value.some(r => !r.title.trim() || !r.url.trim())
+})
 
 // 初始化表格数据
 watch(
@@ -79,6 +116,7 @@ watch(
     if (val) {
       searchFilter.value = ''
       activeDropdownRowId.value = null
+      newCategoryInput.value = ''
       const list: TableRow[] = []
       const catMap = new Map<string, { id: string; icon?: string }>()
       const catNames: string[] = []
@@ -131,8 +169,10 @@ const stats = computed(() => {
   }
 })
 
-// 新增一行站点
+// 新增一行站点（未填完名称和网址前禁止新增）
 const handleAddRow = () => {
+  if (hasIncompleteRows.value) return
+
   const defaultCategory = existingCategoryNames.value[0] || '常用应用'
   const newRow: TableRow = {
     id: `item-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
@@ -187,7 +227,9 @@ const handleUrlBlur = (row: TableRow) => {
 
 // 保存并转化回 NavConfig 结构
 const handleSave = () => {
-  const validRows = rows.value.filter(r => r.url.trim() || r.title.trim())
+  if (hasIncompleteRows.value) return
+
+  const validRows = rows.value.filter(r => r.url.trim() && r.title.trim())
 
   const categoryOrder: string[] = []
   const groupedItems = new Map<string, TableRow[]>()
@@ -281,10 +323,15 @@ const handleSave = () => {
                 />
               </div>
 
+              <!-- 新增站点按钮：未填写完名称和网址前置灰禁用 -->
               <button
                 type="button"
                 @click="handleAddRow"
-                class="flex items-center gap-1 px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200/80 rounded-lg text-xs font-medium transition-colors active:scale-95"
+                :disabled="hasIncompleteRows"
+                class="flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium transition-all"
+                :class="hasIncompleteRows 
+                  ? 'bg-slate-100 text-slate-400 border border-slate-200 opacity-50 cursor-not-allowed' 
+                  : 'bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200/80 active:scale-95 cursor-pointer'"
               >
                 <Plus class="w-3.5 h-3.5" />
                 <span>新增</span>
@@ -309,10 +356,10 @@ const handleSave = () => {
             @change="handleFileChange"
           />
 
-          <!-- 表格主体工作区 (高密度表格，支持独立纵向滚动) -->
+          <!-- 表格主体工作区 -->
           <div class="flex-1 my-3 overflow-auto border border-slate-200/90 rounded-xl bg-white shadow-2xs">
             <table class="w-full border-collapse text-left text-xs">
-              <!-- 表头 (全面降噪：移除所有括号注释与说教) -->
+              <!-- 表头 -->
               <thead class="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200 text-slate-600 font-semibold select-none">
                 <tr>
                   <th class="py-2.5 px-3 w-10 text-center">置顶</th>
@@ -350,7 +397,8 @@ const handleSave = () => {
                       v-model="row.title"
                       type="text"
                       placeholder="名称"
-                      class="w-full bg-transparent hover:bg-slate-100/60 focus:bg-white border border-transparent hover:border-slate-200 focus:border-blue-500 rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none transition-colors"
+                      class="w-full bg-transparent hover:bg-slate-100/60 focus:bg-white border rounded-lg px-2 py-1 text-xs text-slate-800 focus:outline-none transition-colors"
+                      :class="!row.title.trim() && row.url.trim() ? 'border-amber-300 bg-amber-50/30' : 'border-transparent hover:border-slate-200 focus:border-blue-500'"
                     />
                   </td>
 
@@ -361,11 +409,12 @@ const handleSave = () => {
                       @blur="handleUrlBlur(row)"
                       type="text"
                       placeholder="https://..."
-                      class="w-full bg-transparent hover:bg-slate-100/60 focus:bg-white border border-transparent hover:border-slate-200 focus:border-blue-500 rounded-lg px-2 py-1 text-xs text-slate-800 font-mono focus:outline-none transition-colors"
+                      class="w-full bg-transparent hover:bg-slate-100/60 focus:bg-white border rounded-lg px-2 py-1 text-xs text-slate-800 font-mono focus:outline-none transition-colors"
+                      :class="row.title.trim() && !row.url.trim() ? 'border-amber-300 bg-amber-50/30' : 'border-transparent hover:border-slate-200 focus:border-blue-500'"
                     />
                   </td>
 
-                  <!-- 4. 分类 (Combobox：完整全量下拉列表 + 自由打字新建) -->
+                  <!-- 4. 分类 (带空白新增位下拉框) -->
                   <td class="py-1.5 px-2 relative">
                     <div class="relative flex items-center">
                       <input
@@ -388,26 +437,43 @@ const handleSave = () => {
                       </button>
                     </div>
 
-                    <!-- 专属全部分类绝对定位下拉菜单 (不被 input 现有文字过滤，完整呈现所有分类) -->
+                    <!-- 下拉面板：顶部包含空白新增位，下方完整展示全部分类 -->
                     <div
                       v-if="activeDropdownRowId === row.id"
                       @click.stop
-                      class="absolute top-full left-2 right-2 mt-1 z-30 bg-white rounded-xl shadow-xl border border-slate-200 py-1 max-h-48 overflow-y-auto select-none ring-1 ring-black/5"
+                      class="absolute top-full left-2 right-2 mt-1 z-30 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden select-none ring-1 ring-black/5"
                     >
-                      <div
-                        v-for="catName in existingCategoryNames"
-                        :key="catName"
-                        @click="selectCategory(row, catName)"
-                        class="px-2.5 py-1.5 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer flex items-center justify-between transition-colors"
-                        :class="row.categoryName.trim() === catName ? 'bg-slate-50 font-medium text-blue-600' : ''"
-                      >
-                        <span>{{ catName }}</span>
-                        <Check v-if="row.categoryName.trim() === catName" class="w-3 h-3 text-blue-600" />
+                      <!-- 专属空白新增位 -->
+                      <div class="p-1.5 border-b border-slate-100 flex items-center gap-1.5 bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm">
+                        <Plus class="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                        <input
+                          v-model="newCategoryInput"
+                          @click.stop
+                          @blur="handleCreateCategoryOnBlur(row)"
+                          @keydown.enter.prevent="handleCreateCategoryOnBlur(row)"
+                          type="text"
+                          placeholder="新增分类"
+                          class="w-full bg-white border border-slate-200 focus:border-blue-500 rounded px-2 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none transition-colors"
+                        />
+                      </div>
+
+                      <!-- 已有分类完整列表 -->
+                      <div class="max-h-44 overflow-y-auto py-1">
+                        <div
+                          v-for="catName in existingCategoryNames"
+                          :key="catName"
+                          @click="selectCategory(row, catName)"
+                          class="px-2.5 py-1.5 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer flex items-center justify-between transition-colors"
+                          :class="row.categoryName.trim() === catName ? 'bg-slate-50 font-medium text-blue-600' : ''"
+                        >
+                          <span>{{ catName }}</span>
+                          <Check v-if="row.categoryName.trim() === catName" class="w-3 h-3 text-blue-600" />
+                        </div>
                       </div>
                     </div>
                   </td>
 
-                  <!-- 5. 图标 (预览 + 链接输入 + 本地上传按钮) -->
+                  <!-- 5. 图标 -->
                   <td class="py-1.5 px-2">
                     <div class="flex items-center gap-1.5">
                       <div class="w-6 h-6 rounded-md bg-slate-100 border border-slate-200/70 flex items-center justify-center flex-shrink-0 overflow-hidden">
@@ -464,11 +530,17 @@ const handleSave = () => {
 
           <!-- 底部动作与统计栏 -->
           <div class="flex items-center justify-between pt-2 border-t border-slate-100 flex-shrink-0">
-            <div class="flex items-center gap-1.5 text-xs text-slate-500">
-              <CheckCircle2 class="w-3.5 h-3.5 text-blue-500" />
-              <span>{{ stats.totalItems }} 站点 · {{ stats.totalCategories }} 分类</span>
+            <div class="flex items-center gap-2 text-xs">
+              <span class="text-slate-500">
+                {{ stats.totalItems }} 站点 · {{ stats.totalCategories }} 分类
+              </span>
+              <span v-if="hasIncompleteRows" class="text-amber-500 flex items-center gap-1 font-medium">
+                <AlertCircle class="w-3.5 h-3.5" />
+                <span>请补全名称与网址</span>
+              </span>
             </div>
 
+            <!-- 操作按钮：未填写完整前禁止保存 -->
             <div class="flex items-center gap-2">
               <button
                 type="button"
@@ -480,7 +552,11 @@ const handleSave = () => {
               <button
                 type="button"
                 @click="handleSave"
-                class="px-4 py-1.5 rounded-xl text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 transition-all shadow-xs active:scale-95"
+                :disabled="hasIncompleteRows || rows.length === 0"
+                class="px-4 py-1.5 rounded-xl text-xs font-medium transition-all shadow-xs"
+                :class="(hasIncompleteRows || rows.length === 0)
+                  ? 'bg-slate-200 text-slate-400 opacity-50 cursor-not-allowed'
+                  : 'text-white bg-blue-600 hover:bg-blue-700 active:scale-95 cursor-pointer'"
               >
                 保存并应用
               </button>
