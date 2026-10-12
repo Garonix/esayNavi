@@ -13,7 +13,8 @@ import {
   ChevronDown,
   ChevronUp,
   SlidersHorizontal,
-  HardDrive
+  HardDrive,
+  Code2
 } from 'lucide-vue-next'
 import type { NavConfig, NavSettings, BackgroundConfig, BackgroundType, WebDavConfig } from '../types/nav'
 import { saveLocalMedia } from '../services/mediaStorage'
@@ -30,6 +31,7 @@ const emit = defineEmits<{
   (e: 'updateFullConfig', config: NavConfig): void
   (e: 'exportFile'): void
   (e: 'importFile', file: File): void
+  (e: 'openJsonEditor'): void
   (e: 'resetDefault'): void
 }>()
 
@@ -372,29 +374,39 @@ const handleMediaUpload = async (e: Event) => {
                 <span>数据</span>
               </span>
 
-              <div class="grid grid-cols-2 gap-2">
-                <button
-                  @click="$emit('exportFile')"
-                  class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 border border-slate-200 transition-all active:scale-[0.98]"
-                >
-                  <Download class="w-3.5 h-3.5 text-slate-500" />
-                  <span>导出配置</span>
-                </button>
+              <div class="space-y-1.5">
+                <div class="grid grid-cols-2 gap-2">
+                  <button
+                    @click="$emit('exportFile')"
+                    class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 border border-slate-200 transition-all active:scale-[0.98]"
+                  >
+                    <Download class="w-3.5 h-3.5 text-slate-500" />
+                    <span>导出配置</span>
+                  </button>
+
+                  <button
+                    @click="triggerFileInput"
+                    class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 border border-slate-200 transition-all active:scale-[0.98]"
+                  >
+                    <Upload class="w-3.5 h-3.5 text-slate-500" />
+                    <span>导入配置</span>
+                  </button>
+                  <input
+                    ref="fileInputRef"
+                    type="file"
+                    accept=".json"
+                    class="hidden"
+                    @change="handleFileChange"
+                  />
+                </div>
 
                 <button
-                  @click="triggerFileInput"
-                  class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 border border-slate-200 transition-all active:scale-[0.98]"
+                  @click="$emit('openJsonEditor')"
+                  class="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 border border-slate-200 transition-all active:scale-[0.98]"
                 >
-                  <Upload class="w-3.5 h-3.5 text-slate-500" />
-                  <span>导入配置</span>
+                  <Code2 class="w-3.5 h-3.5 text-blue-600" />
+                  <span>在线编辑源码</span>
                 </button>
-                <input
-                  ref="fileInputRef"
-                  type="file"
-                  accept=".json"
-                  class="hidden"
-                  @change="handleFileChange"
-                />
               </div>
             </div>
 
