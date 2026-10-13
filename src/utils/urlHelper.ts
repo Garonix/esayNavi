@@ -59,6 +59,58 @@ export function normalizeUrl(input: string): string {
 }
 
 /**
+ * 智能判定输入字符串是否为一个明确的直接网址 (而非普通搜索词)
+ */
+export function isDirectUrl(input: string): boolean {
+  const text = input.trim()
+  if (!text || /\s/.test(text)) return false
+
+  // 1. 显式带有网络协议 (http://, https://)
+  if (/^https?:\/\//i.test(text)) {
+    try {
+      new URL(text)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  // 2. 本地回环或私有开发主机名 (localhost, localhost:3000 等)
+  if (/^localhost(?::\d+)?(?:\/.*)?$/i.test(text)) {
+    return true
+  }
+
+  // 3. 常见 IPv4 格式地址 (如 192.168.1.1, 10.0.0.1:8080)
+  if (/^(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?(?:\/.*)?$/.test(text)) {
+    return true
+  }
+
+  // 4. 标准域名格式 (例如 github.com, docs.vuejs.org, bilibili.com/video/xxx)
+  // 顶级域名后缀限制为合法 2-24 位字符 (如 .com, .cn, .org, .net, .io, .ai, .dev, .local, .lan 等)
+  const domainRegex = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,24}(?::\d+)?(?:\/.*)?$/
+  if (domainRegex.test(text)) {
+    return true
+  }
+
+  return false
+}
+
+/**
+ * 将直接网址补全为可安全跳转的标准 URL
+ */
+export function toDirectUrl(input: string): string {
+  const text = input.trim()
+  if (/^https?:\/\//i.test(text)) return text
+
+  // 本地 IP 或 localhost 默认使用 http:// 协议
+  if (/^localhost(?::\d+)?/i.test(text) || /^(?:\d{1,3}\.){3}\d{1,3}/.test(text)) {
+    return 'http://' + text
+  }
+
+  return 'https://' + text
+}
+
+/**
  * 从 URL 中提取并格式化友好的网站标题
  */
 export function extractSiteTitle(urlStr: string): string {

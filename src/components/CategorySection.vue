@@ -5,7 +5,9 @@ import {
   CodeXml, 
   Palette, 
   Folder, 
-  Plus
+  Plus,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-vue-next'
 import type { CSSProperties } from 'vue'
 import type { NavCategory, NavItem } from '../types/nav'
@@ -37,12 +39,18 @@ const props = withDefaults(defineProps<{
   isReorderMode?: boolean
   draggedCard?: { categoryId: string; item: NavItem; index: number } | null
   focusedCardId?: string | null
+  isFirstCategory?: boolean
+  isLastCategory?: boolean
+  isSearchActive?: boolean
 }>(), {
   isContextMenuActive: false,
   isAnyContextMenuActive: false,
   isReorderMode: false,
   draggedCard: null,
-  focusedCardId: null
+  focusedCardId: null,
+  isFirstCategory: false,
+  isLastCategory: false,
+  isSearchActive: false
 })
 
 const emit = defineEmits<{
@@ -52,6 +60,8 @@ const emit = defineEmits<{
   (e: 'dropUrlOnCategory', categoryId: string, url: string): void
   (e: 'editCategory', category: NavCategory): void
   (e: 'deleteCategory', categoryId: string): void
+  (e: 'moveCategory', payload: { categoryId: string; direction: 'up' | 'down' }): void
+  (e: 'hoverSection', categoryId: string, isEntering: boolean): void
   (e: 'startReorder', payload: { categoryId: string; item: NavItem }): void
   (e: 'dragStartCard', payload: { categoryId: string; item: NavItem; index: number }): void
   (e: 'dragEndCard'): void
@@ -204,6 +214,7 @@ const collapseSection = () => {
 // 鼠标移入
 const handleMouseEnter = () => {
   isMouseInside.value = true
+  emit('hoverSection', props.category.id, true)
   // 若全局存在激活的右键菜单且不属于本分类，禁止误触扩展，保持绝对静止
   if (props.isAnyContextMenuActive && !props.isContextMenuActive) {
     return
@@ -214,6 +225,7 @@ const handleMouseEnter = () => {
 // 鼠标移出
 const handleMouseLeave = () => {
   isMouseInside.value = false
+  emit('hoverSection', props.category.id, false)
   // 若当前分类的右键菜单正在显示，绝对锁定展开，禁止收起！
   if (props.isContextMenuActive) {
     return
@@ -295,6 +307,13 @@ const getCardWaveStyle = (index: number): CSSProperties => {
     transitionDelay: `${waveDelay}ms`
   }
 }
+
+// “添加”按钮悬停感知显隐 (平时静默淡出，鼠标 hover 到分类时平滑淡入)
+const isAddBtnVisible = computed(() => {
+  if (props.isReorderMode) return false
+  if (props.category.items.length === 0) return true
+  return isMouseInside.value || isHovered.value
+})
 
 // 动态响应式计算展示列表 (实时推移与凹槽插入，触发 TransitionGroup FLIP)
 const displayCards = computed<DisplayCard[]>(() => {
@@ -662,7 +681,7 @@ const getCategoryIcon = (iconName?: string) => {
   >
     <!-- 分类头部 (纯净极简无边框) -->
     <div class="flex items-center mb-2.5 px-1 select-none">
-      <div class="flex items-center gap-2 group">
+      <div class="flex items-center gap-2 group/cat-header">
         <div 
           @click="isCollapsed = !isCollapsed" 
           class="w-5 h-5 rounded-md bg-blue-50 flex items-center justify-center text-blue-600 transition-colors hover:bg-blue-100 cursor-pointer"
@@ -675,6 +694,31 @@ const getCategoryIcon = (iconName?: string) => {
         >
           {{ category.name }}
         </h2>
+
+        <!-- 极简排序微控制箭头 (仅在正常模式且无搜索时 Hover 出现) -->
+        <div 
+          v-if="!isSearchActive && !isReorderMode"
+          class="flex items-center gap-0.5 opacity-0 group-hover/cat-header:opacity-100 transition-opacity duration-150 ml-0.5"
+        >
+          <button
+            v-if="!isFirstCategory"
+            type="button"
+            @click.stop="$emit('moveCategory', { categoryId: category.id, direction: 'up' })"
+            class="p-0.5 rounded hover:bg-slate-200/70 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+            title="上移分类"
+          >
+            <ChevronUp class="w-3 h-3" />
+          </button>
+          <button
+            v-if="!isLastCategory"
+            type="button"
+            @click.stop="$emit('moveCategory', { categoryId: category.id, direction: 'down' })"
+            class="p-0.5 rounded hover:bg-slate-200/70 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+            title="下移分类"
+          >
+            <ChevronDown class="w-3 h-3" />
+          </button>
+        </div>
       </div>
     </div>
 
@@ -740,15 +784,19 @@ const getCategoryIcon = (iconName?: string) => {
           />
         </div>
 
-        <!-- 极简加号卡片 (图标无边框设计，同样接入波浪与过渡逻辑) -->
+        <!-- 极简加号卡片 (平时静默淡出，鼠标 Hover 到分类时平滑淡入) -->
         <div
+          v-if="!isReorderMode"
           key="static-action-add"
-          class="wave-card-wrapper"
+          class="wave-card-wrapper transition-all duration-200 ease-out"
+          :class="isAddBtnVisible 
+            ? 'opacity-100 scale-100 pointer-events-auto' 
+            : 'opacity-0 scale-95 pointer-events-none'"
           :style="getCardWaveStyle(displayCards.length)"
         >
           <button
             @click="$emit('addItemToCategory', category.id)"
-            class="w-full h-[94px] rounded-2xl border border-transparent hover:bg-slate-100/70 text-slate-400 hover:text-blue-600 flex flex-col items-center justify-center gap-1.5 transition-all duration-200 active:scale-95 p-2 select-none"
+            class="w-full h-[94px] rounded-2xl border border-transparent hover:bg-slate-100/70 text-slate-400 hover:text-blue-600 flex flex-col items-center justify-center gap-1.5 transition-all duration-200 active:scale-95 p-2 select-none cursor-pointer"
           >
             <div class="w-8 h-8 rounded-full bg-slate-100/80 hover:bg-blue-50 flex items-center justify-center transition-colors">
               <Plus class="w-4 h-4 transition-transform duration-200" />

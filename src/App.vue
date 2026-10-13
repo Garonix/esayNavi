@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { FolderPlus, Search, HelpCircle, CheckCircle2, Settings, Check, Zap } from 'lucide-vue-next'
+import { FolderPlus, HelpCircle, CheckCircle2, Settings, Check, Zap } from 'lucide-vue-next'
 import type { NavConfig, NavCategory, NavItem, NavSettings } from './types/nav'
 import { 
   loadInitialConfig, 
@@ -9,13 +9,14 @@ import {
   importConfigFile, 
   DEFAULT_CONFIG 
 } from './services/storage'
-import { extractSiteTitle, getFaviconUrl, normalizeUrl } from './utils/urlHelper'
+import { extractSiteTitle, getFaviconUrl, normalizeUrl, isDirectUrl, toDirectUrl } from './utils/urlHelper'
 import { matchPinyinQuery } from './utils/pinyinHelper'
 import { resolveSiteFavicon } from './services/faviconFetcher'
 import { saveCachedIcon, initIconCache } from './services/iconCache'
 
 import Header from './components/Header.vue'
 import CategorySection from './components/CategorySection.vue'
+import SearchEmptyReel from './components/SearchEmptyReel.vue'
 import AddSiteModal from './components/AddSiteModal.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import EditCategoryModal from './components/EditCategoryModal.vue'
@@ -364,7 +365,19 @@ const handleClearFocus = () => {
   activeKeyboardIndex.value = -1
 }
 
+const handleOpenDirectUrl = (url: string) => {
+  if (config.value.settings.openInNewTab) {
+    window.open(url, '_blank', 'noopener,noreferrer')
+  } else {
+    window.location.href = url
+  }
+}
+
 const handleSearchSubmit = (query: string, engineBaseUrl: string) => {
+  if (isDirectUrl(query)) {
+    handleOpenDirectUrl(toDirectUrl(query))
+    return
+  }
   window.open(`${engineBaseUrl}${encodeURIComponent(query)}`, '_blank')
 }
 
@@ -647,6 +660,59 @@ const handleDeleteCategory = (categoryId: string) => {
   }
 }
 
+// 分类排序微调与互换
+const handleMoveCategory = (payload: { categoryId: string; direction: 'up' | 'down' }) => {
+  const { categoryId, direction } = payload
+  const list = config.value.categories
+  const idx = list.findIndex(c => c.id === categoryId)
+  if (idx === -1) return
+
+  const targetIdx = direction === 'up' ? idx - 1 : idx + 1
+  if (targetIdx < 0 || targetIdx >= list.length) return
+
+  const temp = list[idx]
+  list[idx] = list[targetIdx]
+  list[targetIdx] = temp
+
+  persistChanges()
+  showToast(direction === 'up' ? '已上移分类' : '已下移分类')
+}
+
+const handleModalMoveCategory = (direction: 'up' | 'down') => {
+  if (!editingCategory.value) return
+  handleMoveCategory({ categoryId: editingCategory.value.id, direction })
+}
+
+const isEditingFirstCategory = computed(() => {
+  if (!editingCategory.value || config.value.categories.length === 0) return true
+  return config.value.categories[0].id === editingCategory.value.id
+})
+
+const isEditingLastCategory = computed(() => {
+  if (!editingCategory.value || config.value.categories.length === 0) return true
+  return config.value.categories[config.value.categories.length - 1].id === editingCategory.value.id
+})
+
+// 底部“新建分类”悬停感知 (仅在最后一个分类 Hover 或触底时平滑淡入)
+const hoveredCategoryId = ref<string | null>(null)
+const isHoveringBottomTrigger = ref(false)
+
+const handleCategoryHover = (catId: string, isEntering: boolean) => {
+  if (isEntering) {
+    hoveredCategoryId.value = catId
+  } else if (hoveredCategoryId.value === catId) {
+    hoveredCategoryId.value = null
+  }
+}
+
+const isAddCategoryVisible = computed(() => {
+  if (searchQuery.value.trim()) return false
+  if (config.value.categories.length === 0) return true
+  const lastCat = config.value.categories[config.value.categories.length - 1]
+  if (!lastCat) return false
+  return hoveredCategoryId.value === lastCat.id || isHoveringBottomTrigger.value
+})
+
 const handleExportFile = () => {
   exportConfigFile(config.value, 'easynavi.json')
   showToast('已导出')
@@ -700,6 +766,7 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
         :has-active-card-focus="!!activeFocusedCard"
         :focused-card-title="activeFocusedCard?.title"
         @submit-search="handleSearchSubmit"
+        @open-direct-url="handleOpenDirectUrl"
         @navigate-cards="handleNavigateCards"
         @select-focused-card="handleSelectFocusedCard"
         @clear-focus="handleClearFocus"
@@ -733,9 +800,13 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
           </div>
         </div>
 
-        <div v-if="filteredCategories.length > 0">
+        <TransitionGroup 
+          v-if="filteredCategories.length > 0"
+          name="category-flow" 
+          tag="div"
+        >
           <CategorySection
-            v-for="cat in filteredCategories"
+            v-for="(cat, idx) in filteredCategories"
             :key="cat.id"
             :category="cat"
             :open-in-new-tab="config.settings.openInNewTab"
@@ -744,43 +815,46 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
             :is-reorder-mode="isReorderMode"
             :dragged-card="draggedCardInfo"
             :focused-card-id="activeFocusedCard?.id"
+            :is-first-category="idx === 0"
+            :is-last-category="idx === filteredCategories.length - 1"
+            :is-search-active="!!searchQuery.trim()"
             @click-item="handleClickItem"
             @open-context-menu="handleOpenContextMenu"
             @add-item-to-category="openAddModal"
             @drop-url-on-category="handleDropUrlOnCategory"
             @edit-category="handleEditCategory"
             @delete-category="handleDeleteCategory"
+            @move-category="handleMoveCategory"
+            @hover-section="handleCategoryHover"
             @start-reorder="handleStartReorder"
             @drag-start-card="handleDragStartCard"
             @drag-end-card="handleDragEndCard"
             @drop-card="handleDropCard"
           />
-        </div>
+        </TransitionGroup>
 
-        <!-- 搜索空状态 (极致降噪) -->
+        <!-- 搜索空状态画卷胶囊流 (方案C: 物理卷轴级联波浪展开/收起) -->
+        <SearchEmptyReel
+          v-else-if="searchQuery.trim()"
+          :show="filteredCategories.length === 0 && !!searchQuery.trim()"
+          :search-query="searchQuery"
+          :active-engine-id="config.settings.searchEngine || 'google'"
+          @search="handleSearchSubmit"
+        />
+
+        <!-- 底部添加分类 (搜索态彻底不显示；正常主页平时隐藏，Hover最后一个分类或页面触底时淡入) -->
         <div 
-          v-else-if="searchQuery.trim()" 
-          class="max-w-xs mx-auto text-center py-16"
+          v-if="!searchQuery.trim()"
+          @mouseenter="isHoveringBottomTrigger = true"
+          @mouseleave="isHoveringBottomTrigger = false"
+          class="w-full flex justify-center pt-2 pb-6 transition-all duration-300 ease-out"
+          :class="isAddCategoryVisible 
+            ? 'opacity-100 translate-y-0 pointer-events-auto' 
+            : 'opacity-0 translate-y-3 pointer-events-none'"
         >
-          <div class="bg-white/90 backdrop-blur-md rounded-2xl p-6 border border-slate-200/90 shadow-sm flex flex-col items-center">
-            <div class="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 mb-3">
-              <Search class="w-5 h-5" />
-            </div>
-            <p class="text-xs font-medium text-slate-600 mb-4">无结果</p>
-            <button
-              @click="handleSearchSubmit(searchQuery, 'https://www.google.com/search?q=')"
-              class="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium shadow-xs shadow-blue-500/20 transition-all active:scale-95"
-            >
-              搜索
-            </button>
-          </div>
-        </div>
-
-        <!-- 底部添加分类 (无边框扁平设计) -->
-        <div class="w-full flex justify-center pt-2 pb-6">
           <button
             @click="handleAddCategory"
-            class="group flex items-center gap-1.5 px-4 py-2 rounded-xl hover:bg-slate-100/80 text-slate-400 hover:text-blue-600 text-xs font-medium transition-all active:scale-95 select-none"
+            class="group flex items-center gap-1.5 px-4 py-2 rounded-xl hover:bg-slate-100/80 text-slate-400 hover:text-blue-600 text-xs font-medium transition-all active:scale-95 select-none cursor-pointer"
           >
             <FolderPlus class="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
             <span>新建分类</span>
@@ -862,9 +936,12 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
     <EditCategoryModal
       :show="showCategoryModal"
       :category="editingCategory"
+      :is-first-category="isEditingFirstCategory"
+      :is-last-category="isEditingLastCategory"
       @close="showCategoryModal = false"
       @save="handleSaveCategory"
       @delete="handleDeleteCategory"
+      @move="handleModalMoveCategory"
     />
 
     <KeyboardShortcutsModal
@@ -962,3 +1039,10 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* 分类换位 FLIP 平滑位移动画 */
+.category-flow-move {
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+</style>

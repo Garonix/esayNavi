@@ -1,17 +1,20 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { X, Folder, Sparkles, CodeXml, Palette, FolderEdit, Trash2, AlertTriangle } from 'lucide-vue-next'
+import { X, Folder, Sparkles, CodeXml, Palette, FolderEdit, Trash2, AlertTriangle, ChevronUp, ChevronDown } from 'lucide-vue-next'
 import type { NavCategory } from '../types/nav'
 
 const props = defineProps<{
   show: boolean
   category: NavCategory | null
+  isFirstCategory?: boolean
+  isLastCategory?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'save', category: NavCategory): void
   (e: 'delete', categoryId: string): void
+  (e: 'move', direction: 'up' | 'down'): void
 }>()
 
 const name = ref('')
@@ -174,6 +177,36 @@ const handleConfirmDelete = () => {
               >
                 <component :is="opt.icon" class="w-3.5 h-3.5" />
                 <span>{{ opt.name }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1.5">显示顺序</label>
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                :disabled="isFirstCategory"
+                @click="$emit('move', 'up')"
+                class="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all"
+                :class="isFirstCategory 
+                  ? 'opacity-40 border-slate-200 text-slate-400 cursor-not-allowed bg-slate-50' 
+                  : 'border-slate-200 hover:border-blue-400 text-slate-700 hover:text-blue-600 hover:bg-blue-50/50 active:scale-95 cursor-pointer'"
+              >
+                <ChevronUp class="w-3.5 h-3.5" />
+                <span>上移</span>
+              </button>
+              <button
+                type="button"
+                :disabled="isLastCategory"
+                @click="$emit('move', 'down')"
+                class="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all"
+                :class="isLastCategory 
+                  ? 'opacity-40 border-slate-200 text-slate-400 cursor-not-allowed bg-slate-50' 
+                  : 'border-slate-200 hover:border-blue-400 text-slate-700 hover:text-blue-600 hover:bg-blue-50/50 active:scale-95 cursor-pointer'"
+              >
+                <ChevronDown class="w-3.5 h-3.5" />
+                <span>下移</span>
               </button>
             </div>
           </div>
