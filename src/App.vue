@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { FolderPlus, HelpCircle, CheckCircle2, Settings, Check, Zap } from 'lucide-vue-next'
+import { FolderPlus, HelpCircle, CheckCircle2, Settings, Check } from 'lucide-vue-next'
 import type { NavConfig, NavCategory, NavItem, NavSettings } from './types/nav'
 import { 
   loadInitialConfig, 
@@ -156,19 +156,6 @@ const handleGlobalDragOver = (e: DragEvent) => {
   }
 }
 
-// 高频常用推荐流 (基于真实点击量加权提炼)
-const frequentItems = computed<NavItem[]>(() => {
-  if (!config.value.settings.showFrequentBar || searchQuery.value.trim()) return []
-  const all: NavItem[] = []
-  for (const cat of config.value.categories) {
-    for (const item of cat.items) {
-      if ((item.clickCount || 0) > 0) {
-        all.push(item)
-      }
-    }
-  }
-  return all.sort((a, b) => (b.clickCount || 0) - (a.clickCount || 0)).slice(0, 8)
-})
 
 const handleUpdateFullConfig = (newConfig: NavConfig) => {
   config.value = newConfig
@@ -550,13 +537,6 @@ const handleClickItem = (item: NavItem) => {
   saveConfigToLocal(config.value)
 }
 
-const openItemDirect = (item: NavItem) => {
-  if (config.value.settings.openInNewTab) {
-    window.open(item.url, '_blank', 'noopener,noreferrer')
-  } else {
-    window.location.href = item.url
-  }
-}
 
 const handleOpenContextMenu = (payload: { item: NavItem; x: number; y: number; categoryId?: string }) => {
   let targetCatId = payload.categoryId
@@ -650,6 +630,18 @@ const handleEditCategory = (cat: NavCategory) => {
 }
 
 const handleSaveCategory = (updatedCat: NavCategory) => {
+  const cleanName = updatedCat.name.trim().toLowerCase()
+  if (!cleanName) return
+
+  // 严格查重保护 (防范同名分类创建与重命名)
+  const isDuplicate = config.value.categories.some(c => 
+    c.id !== updatedCat.id && c.name.trim().toLowerCase() === cleanName
+  )
+  if (isDuplicate) {
+    showToast('分类名称已存在')
+    return
+  }
+
   if (isCreatingCategory.value) {
     config.value.categories.push(updatedCat)
     persistChanges()
@@ -794,32 +786,6 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
 
       <!-- 分类站点列表 (左右留白充沛优雅，max-w-4xl 黄金居中) -->
       <main class="relative z-10 w-full max-w-4xl mx-auto px-6 sm:px-12 md:px-16 pb-28">
-        <!-- 高频常用智能推荐流 (点击加权自学习复利) -->
-        <div v-if="frequentItems.length > 0" class="mb-5 px-1 select-none">
-          <div class="flex items-center gap-1.5 mb-2 text-[11px] font-semibold text-slate-400">
-            <Zap class="w-3 h-3 text-amber-500 fill-amber-500/20" />
-            <span>高频常用</span>
-          </div>
-          <div class="flex items-center gap-2 overflow-x-auto pb-1.5 pt-0.5" style="scrollbar-width: none;">
-            <div
-              v-for="item in frequentItems"
-              :key="'freq-' + item.id"
-              @click="handleClickItem(item); openItemDirect(item)"
-              class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/90 hover:bg-white border border-slate-200/90 hover:border-blue-400 hover:shadow-xs text-xs font-medium text-slate-700 transition-all cursor-pointer flex-shrink-0 active:scale-95 group shadow-2xs backdrop-blur-md"
-            >
-              <img
-                v-if="item.icon"
-                :src="item.icon"
-                class="w-4 h-4 object-contain group-hover:scale-110 transition-transform pointer-events-none"
-                @error="($event.target as HTMLElement).style.display = 'none'"
-              />
-              <span class="max-w-[80px] truncate text-slate-700 group-hover:text-blue-600 transition-colors">
-                {{ item.title }}
-              </span>
-            </div>
-          </div>
-        </div>
-
         <TransitionGroup 
           v-if="filteredCategories.length > 0"
           name="category-flow" 
@@ -830,6 +796,8 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
             :key="cat.id"
             :category="cat"
             :open-in-new-tab="config.settings.openInNewTab"
+            :card-density="config.settings.cardDensity"
+            :category-spacing="config.settings.categorySpacing"
             :is-context-menu-active="activeContextMenuCategoryId === cat.id"
             :is-any-context-menu-active="contextMenuState.show"
             :is-reorder-mode="isReorderMode"
@@ -955,6 +923,7 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
     <EditCategoryModal
       :show="showCategoryModal"
       :category="editingCategory"
+      :existing-categories="config.categories"
       :is-creating="isCreatingCategory"
       :is-first-category="isEditingFirstCategory"
       :is-last-category="isEditingLastCategory"

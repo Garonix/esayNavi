@@ -116,22 +116,11 @@ const maskStyle = computed(() => {
     class="fixed inset-0 overflow-hidden z-0 select-none"
     :class="zenMode ? 'pointer-events-auto' : 'pointer-events-none'"
   >
-    <!-- 1. 默认纯白背景 -->
+    <!-- 1. 默认纯白背景 (兼容老配置 mesh 回退为纯白) -->
     <div 
-      v-if="!config || config.type === 'white'"
+      v-if="!config || config.type === 'white' || (config.type as any) === 'mesh'"
       class="w-full h-full bg-white"
     ></div>
-
-    <!-- 2. 流光环境极光 (纯 CSS 零 JS 零开销) -->
-    <div 
-      v-else-if="config.type === 'mesh'"
-      class="aurora-bg"
-    >
-      <div class="absolute inset-0 bg-grid-pattern opacity-60"></div>
-      <div class="aurora-blob aurora-blob-1"></div>
-      <div class="aurora-blob aurora-blob-2"></div>
-      <div class="aurora-blob aurora-blob-3"></div>
-    </div>
 
     <!-- 3. 自定义图片背景层 -->
     <div 

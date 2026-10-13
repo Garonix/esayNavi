@@ -42,6 +42,8 @@ const props = withDefaults(defineProps<{
   isFirstCategory?: boolean
   isLastCategory?: boolean
   isSearchActive?: boolean
+  cardDensity?: 'compact' | 'normal' | 'relaxed'
+  categorySpacing?: 'compact' | 'normal' | 'relaxed'
 }>(), {
   isContextMenuActive: false,
   isAnyContextMenuActive: false,
@@ -50,7 +52,9 @@ const props = withDefaults(defineProps<{
   focusedCardId: null,
   isFirstCategory: false,
   isLastCategory: false,
-  isSearchActive: false
+  isSearchActive: false,
+  cardDensity: 'normal',
+  categorySpacing: 'normal'
 })
 
 const emit = defineEmits<{
@@ -80,22 +84,82 @@ const reelGridRef = ref<any>(null)
 const SINGLE_ROW_HEIGHT = 98
 const currentHeight = ref<string>(`${SINGLE_ROW_HEIGHT}px`)
 
-// 动态响应式列数检测 (确保第一排卡片永不误判)
+// 动态响应式列数检测 (根据 density 与屏宽智能适配，确保第一排卡片永不误判)
 const columnsCount = ref(6)
 
 const updateColumnsCount = () => {
   if (typeof window === 'undefined') return
   const w = window.innerWidth
-  if (w < 640) {
-    columnsCount.value = 3
-  } else if (w < 768) {
-    columnsCount.value = 4
-  } else if (w < 1024) {
-    columnsCount.value = 5
+  const density = props.cardDensity || 'normal'
+
+  if (density === 'compact') {
+    // 紧凑：间距更小，单行容纳更多卡片
+    if (w < 640) {
+      columnsCount.value = 3
+    } else if (w < 768) {
+      columnsCount.value = 4
+    } else if (w < 1024) {
+      columnsCount.value = 6
+    } else if (w < 1280) {
+      columnsCount.value = 7
+    } else {
+      columnsCount.value = 8
+    }
+  } else if (density === 'relaxed') {
+    // 宽松：间距更大，单行容纳较少卡片
+    if (w < 640) {
+      columnsCount.value = 2
+    } else if (w < 768) {
+      columnsCount.value = 3
+    } else if (w < 1024) {
+      columnsCount.value = 4
+    } else {
+      columnsCount.value = 5
+    }
   } else {
-    columnsCount.value = 6
+    // 标准
+    if (w < 640) {
+      columnsCount.value = 3
+    } else if (w < 768) {
+      columnsCount.value = 4
+    } else if (w < 1024) {
+      columnsCount.value = 5
+    } else {
+      columnsCount.value = 6
+    }
   }
 }
+
+watch(() => props.cardDensity, () => {
+  updateColumnsCount()
+  nextTick(updateReelHeight)
+})
+
+// 图标网格布局类名 (通过同行图标间距控制单行容量)
+const gridDensityClass = computed(() => {
+  switch (props.cardDensity) {
+    case 'compact':
+      return 'grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8 gap-2'
+    case 'relaxed':
+      return 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-5'
+    case 'normal':
+    default:
+      return 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3'
+  }
+})
+
+// 分类显示垂直间距类名
+const categorySpacingClass = computed(() => {
+  switch (props.categorySpacing) {
+    case 'compact':
+      return 'mb-2.5'
+    case 'relaxed':
+      return 'mb-8'
+    case 'normal':
+    default:
+      return 'mb-4'
+  }
+})
 
 // 方案 C（原地稳定模式）：计算当前分类在换位模式下是否需要保持展开
 // 仅当前被长按的主活动分类、正在拖拽的源分类、跨分类拖入吸附的目标分类展开
@@ -666,8 +730,9 @@ const getCategoryIcon = (iconName?: string) => {
   <section 
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
-    class="category-section w-full mb-4 rounded-2xl p-2.5 transition-colors duration-200"
+    class="category-section w-full rounded-2xl p-2.5 transition-all duration-200"
     :class="[
+      categorySpacingClass,
       isDragOver ? 'bg-blue-50/70 ring-2 ring-blue-400 ring-dashed shadow-md' : 'hover:bg-slate-50/50',
       isReorderMode ? 'bg-slate-50/60 ring-1 ring-slate-200/60' : ''
     ]"
@@ -724,12 +789,13 @@ const getCategoryIcon = (iconName?: string) => {
       class="scroll-reel-container overflow-hidden"
       :style="{ height: currentHeight }"
     >
-      <!-- 舒适透气的 3~6 列自适应网格 + FLIP 平滑挤占 TransitionGroup -->
+      <!-- 动态响应式自适应网格 (紧凑/标准/宽松同行图标间距控制) + FLIP 平滑挤占 TransitionGroup -->
       <TransitionGroup
         ref="reelGridRef"
         name="card-reorder"
         tag="div"
-        class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3 relative p-0.5"
+        class="grid relative p-0.5 transition-all duration-200"
+        :class="gridDensityClass"
       >
         <div
           v-for="(card, idx) in displayCards"

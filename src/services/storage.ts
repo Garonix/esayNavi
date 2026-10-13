@@ -61,7 +61,7 @@ export async function loadInitialConfig(): Promise<NavConfig> {
             parsed.settings.background = 'white'
             needSave = true
           }
-          if (parsed.settings.customBackground && (parsed.settings.customBackground.type === 'particles' || (parsed.settings.customBackground.type as any) === 'video')) {
+          if (parsed.settings.customBackground && (parsed.settings.customBackground.type === 'particles' || (parsed.settings.customBackground.type as any) === 'video' || (parsed.settings.customBackground.type as any) === 'mesh')) {
             parsed.settings.customBackground.type = 'white'
             needSave = true
           }

@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { X, Folder, Sparkles, CodeXml, Palette, FolderEdit, FolderPlus, Trash2, AlertTriangle, ChevronUp, ChevronDown } from 'lucide-vue-next'
 import type { NavCategory } from '../types/nav'
 
 const props = withDefaults(defineProps<{
   show: boolean
   category: NavCategory | null
+  existingCategories?: NavCategory[]
   isCreating?: boolean
   isFirstCategory?: boolean
   isLastCategory?: boolean
 }>(), {
+  existingCategories: () => [],
   isCreating: false,
   isFirstCategory: false,
   isLastCategory: false
@@ -26,6 +28,17 @@ const name = ref('')
 const icon = ref('folder')
 const showConfirmDelete = ref(false)
 const inputRef = ref<HTMLInputElement | null>(null)
+
+// 校验分类名是否与已有其他分类重名 (忽略首尾空格，大小写不敏感)
+const isDuplicateName = computed(() => {
+  const clean = name.value.trim().toLowerCase()
+  if (!clean) return false
+  const currentId = props.category?.id
+  return (props.existingCategories || []).some(cat => {
+    if (currentId && cat.id === currentId) return false
+    return cat.name.trim().toLowerCase() === clean
+  })
+})
 
 const iconOptions = [
   { id: 'folder', name: '常规', icon: Folder },
@@ -61,7 +74,7 @@ watch(
 )
 
 const handleSave = () => {
-  if (!props.category || !name.value.trim()) return
+  if (!props.category || !name.value.trim() || isDuplicateName.value) return
   emit('save', {
     ...props.category,
     name: name.value.trim(),
@@ -173,8 +186,15 @@ const handleConfirmDelete = () => {
               type="text"
               placeholder="请输入分类名称"
               @keydown.enter.prevent="handleSave"
-              class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
+              class="w-full bg-slate-50 border rounded-xl px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:bg-white transition-all"
+              :class="isDuplicateName 
+                ? 'border-rose-300 focus:border-rose-500 ring-2 ring-rose-500/10' 
+                : 'border-slate-200 focus:border-blue-500'"
             />
+            <p v-if="isDuplicateName" class="text-[11px] text-rose-500 font-medium mt-1 flex items-center gap-1">
+              <AlertTriangle class="w-3 h-3 text-rose-500" />
+              <span>该分类名称已存在，请换一个名称</span>
+            </p>
           </div>
 
           <div>
@@ -237,10 +257,10 @@ const handleConfirmDelete = () => {
             </button>
             <button
               type="button"
-              :disabled="!name.trim()"
+              :disabled="!name.trim() || isDuplicateName"
               @click="handleSave"
               class="px-4 py-1.5 rounded-xl text-xs font-medium transition-all"
-              :class="name.trim() 
+              :class="name.trim() && !isDuplicateName
                 ? 'bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-xs shadow-blue-500/25 cursor-pointer' 
                 : 'bg-slate-200 text-slate-400 cursor-not-allowed'"
             >

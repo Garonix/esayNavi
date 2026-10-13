@@ -38,7 +38,9 @@ export interface NavSettings {
   openInNewTab: boolean
   showClock: boolean
   showSearch: boolean
-  showFrequentBar?: boolean // 智能常用置顶流
+  showFrequentBar?: boolean // 智能常用置顶流 (兼容旧配置)
+  cardDensity?: 'compact' | 'normal' | 'relaxed' // 单行图标数量/密度调节
+  categorySpacing?: 'compact' | 'normal' | 'relaxed' // 分类显示间距调节
 }
 
 export interface NavConfig {

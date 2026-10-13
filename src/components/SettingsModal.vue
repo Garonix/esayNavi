@@ -126,18 +126,17 @@ const handleMediaUpload = async (e: Event) => {
                 <span>背景</span>
               </span>
 
-              <!-- 极简三段选择器 -->
-              <div class="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-xl">
+              <!-- 极简两段选择器 (纯白 / 图片，移除高能耗流光) -->
+              <div class="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl">
                 <button
                   v-for="t in [
                     { id: 'white', label: '纯白' },
-                    { id: 'mesh', label: '流光' },
                     { id: 'image', label: '图片' }
                   ]"
                   :key="t.id"
                   type="button"
                   @click="setBgType(t.id as any)"
-                  class="py-1.5 rounded-lg text-xs font-medium transition-all duration-150"
+                  class="py-1.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer"
                   :class="bgConfig.type === t.id 
                     ? 'bg-white text-blue-600 shadow-xs font-semibold' 
                     : 'text-slate-600 hover:text-slate-900'"
@@ -225,18 +224,19 @@ const handleMediaUpload = async (e: Event) => {
             </div>
 
             <!-- 2. 偏好 -->
-            <div class="space-y-2 pt-3 border-t border-slate-100">
+            <div class="space-y-3 pt-3 border-t border-slate-100">
               <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
                 <SlidersHorizontal class="w-3.5 h-3.5 text-blue-600" />
                 <span>偏好</span>
               </span>
 
-              <div class="space-y-2 pt-0.5">
+              <div class="space-y-3 pt-0.5">
+                <!-- 新标签页打开 -->
                 <div class="flex items-center justify-between text-xs text-slate-600 px-1">
                   <span>新标签页打开</span>
                   <button
                     @click="$emit('updateSettings', { openInNewTab: !config.settings.openInNewTab })"
-                    class="w-8 h-4.5 rounded-full transition-colors relative p-0.5"
+                    class="w-8 h-4.5 rounded-full transition-colors relative p-0.5 cursor-pointer"
                     :class="config.settings.openInNewTab ? 'bg-blue-600' : 'bg-slate-200'"
                   >
                     <div 
@@ -246,18 +246,60 @@ const handleMediaUpload = async (e: Event) => {
                   </button>
                 </div>
 
-                <div class="flex items-center justify-between text-xs text-slate-600 px-1">
-                  <span>常用推荐流</span>
-                  <button
-                    @click="$emit('updateSettings', { showFrequentBar: !config.settings.showFrequentBar })"
-                    class="w-8 h-4.5 rounded-full transition-colors relative p-0.5"
-                    :class="config.settings.showFrequentBar ? 'bg-blue-600' : 'bg-slate-200'"
-                  >
-                    <div 
-                      class="w-3.5 h-3.5 rounded-full bg-white shadow-xs transform transition-transform"
-                      :class="config.settings.showFrequentBar ? 'translate-x-3.5' : 'translate-x-0'"
-                    ></div>
-                  </button>
+                <!-- 单行图标数量 (调节间距实现数量变化) -->
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between text-xs text-slate-600 px-1">
+                    <span>单行图标数量</span>
+                    <span class="text-[11px] text-slate-400 font-normal">
+                      {{ (config.settings.cardDensity === 'compact') ? '紧凑 · 容纳更多' : (config.settings.cardDensity === 'relaxed') ? '宽松 · 容纳较少' : '标准' }}
+                    </span>
+                  </div>
+                  <div class="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-xl">
+                    <button
+                      v-for="d in [
+                        { id: 'compact', label: '紧凑' },
+                        { id: 'normal', label: '标准' },
+                        { id: 'relaxed', label: '宽松' }
+                      ]"
+                      :key="d.id"
+                      type="button"
+                      @click="$emit('updateSettings', { cardDensity: d.id as any })"
+                      class="py-1.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer"
+                      :class="(config.settings.cardDensity || 'normal') === d.id 
+                        ? 'bg-white text-blue-600 shadow-xs font-semibold' 
+                        : 'text-slate-600 hover:text-slate-900'"
+                    >
+                      {{ d.label }}
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 分类显示间距 -->
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between text-xs text-slate-600 px-1">
+                    <span>分类显示间距</span>
+                    <span class="text-[11px] text-slate-400 font-normal">
+                      {{ (config.settings.categorySpacing === 'compact') ? '紧凑小间距' : (config.settings.categorySpacing === 'relaxed') ? '开阔大间距' : '标准间距' }}
+                    </span>
+                  </div>
+                  <div class="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-xl">
+                    <button
+                      v-for="s in [
+                        { id: 'compact', label: '紧凑' },
+                        { id: 'normal', label: '标准' },
+                        { id: 'relaxed', label: '开阔' }
+                      ]"
+                      :key="s.id"
+                      type="button"
+                      @click="$emit('updateSettings', { categorySpacing: s.id as any })"
+                      class="py-1.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer"
+                      :class="(config.settings.categorySpacing || 'normal') === s.id 
+                        ? 'bg-white text-blue-600 shadow-xs font-semibold' 
+                        : 'text-slate-600 hover:text-slate-900'"
+                    >
+                      {{ s.label }}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
