@@ -10,6 +10,7 @@ import {
   DEFAULT_CONFIG 
 } from './services/storage'
 import { extractSiteTitle, getFaviconUrl, normalizeUrl, isDirectUrl, toDirectUrl } from './utils/urlHelper'
+import { buildSearchUrl } from './utils/searchEngines'
 import { matchPinyinQuery } from './utils/pinyinHelper'
 import { resolveSiteFavicon } from './services/faviconFetcher'
 import { saveCachedIcon, initIconCache } from './services/iconCache'
@@ -369,7 +370,8 @@ const handleSearchSubmit = (query: string, engineBaseUrl: string) => {
     handleOpenDirectUrl(toDirectUrl(query))
     return
   }
-  window.open(`${engineBaseUrl}${encodeURIComponent(query)}`, '_blank')
+  const targetUrl = buildSearchUrl(engineBaseUrl, query)
+  window.open(targetUrl, '_blank')
 }
 
 const openAddModal = (categoryId?: string) => {
@@ -826,6 +828,7 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
           :show="filteredCategories.length === 0 && !!searchQuery.trim()"
           :search-query="searchQuery"
           :active-engine-id="config.settings.searchEngine || 'google'"
+          :custom-engines="config.settings.searchEngines"
           @search="handleSearchSubmit"
         />
 

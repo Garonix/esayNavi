@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Search, CornerDownLeft } from 'lucide-vue-next'
-import { SEARCH_ENGINES, type SearchEngineItem } from '../utils/searchEngines'
+import { resolveSearchEngines, type SearchEngineItem } from '../utils/searchEngines'
+import type { SearchEngineItemConfig } from '../types/nav'
 
 const props = defineProps<{
   show: boolean
   searchQuery: string
   activeEngineId?: string
+  customEngines?: SearchEngineItemConfig[]
 }>()
 
 const emit = defineEmits<{
@@ -14,6 +16,12 @@ const emit = defineEmits<{
 }>()
 
 const isRevealed = ref(false)
+
+// 仅呈现启用的搜索引擎（响应用户自定义偏好）
+const displayEngines = computed<SearchEngineItem[]>(() => {
+  const all = resolveSearchEngines(props.customEngines)
+  return all.filter(e => e.enabled !== false)
+})
 
 watch(
   () => props.show,
@@ -61,7 +69,7 @@ const handleSelectEngine = (engine: SearchEngineItem) => {
       <!-- 引擎横向画卷胶囊流 (波浪级联延时展开) -->
       <div class="flex items-center justify-center flex-wrap gap-2.5 w-full">
         <button
-          v-for="(engine, idx) in SEARCH_ENGINES"
+          v-for="(engine, idx) in displayEngines"
           :key="engine.id"
           @click="handleSelectEngine(engine)"
           class="wave-capsule group relative flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-medium transition-all duration-200 cursor-pointer active:scale-95 shadow-2xs backdrop-blur-md"

@@ -29,12 +29,22 @@ export interface BackgroundConfig {
   parallax: boolean // 视差滚动
 }
 
+export interface SearchEngineItemConfig {
+  id: string
+  name: string
+  url: string
+  icon?: string
+  enabled: boolean
+  isCustom?: boolean
+}
+
 export interface NavSettings {
   title: string
   theme: 'dark' | 'light' | 'auto'
   background: BackgroundType
   customBackground?: BackgroundConfig
-  searchEngine: 'google' | 'bing' | 'baidu' | 'duckduckgo' | 'github'
+  searchEngine: string // 当前默认回车搜索引擎 ID
+  searchEngines?: SearchEngineItemConfig[] // 用户自定义与启用的搜索引擎列表
   openInNewTab: boolean
   showClock: boolean
   showSearch: boolean

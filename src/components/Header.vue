@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { 
   Search, 
   X, 
@@ -7,7 +7,7 @@ import {
   ExternalLink
 } from 'lucide-vue-next'
 import type { NavSettings } from '../types/nav'
-import { SEARCH_ENGINES, BANG_MAP } from '../utils/searchEngines'
+import { resolveSearchEngines, BANG_MAP } from '../utils/searchEngines'
 import { isDirectUrl, toDirectUrl } from '../utils/urlHelper'
 
 const props = defineProps<{
@@ -26,10 +26,17 @@ const emit = defineEmits<{
   (e: 'clearFocus'): void
 }>()
 
-const engines = SEARCH_ENGINES
-
+const engines = computed(() => {
+  const all = resolveSearchEngines(props.settings.searchEngines)
+  return all.filter(e => e.enabled !== false)
+})
 
 const currentEngine = ref(props.settings.searchEngine || 'google')
+
+// 同步设置变化
+watch(() => props.settings.searchEngine, (val?: string) => {
+  if (val) currentEngine.value = val
+})
 const showEngineMenu = ref(false)
 const isFocused = ref(false)
 const inputRef = ref<HTMLInputElement | null>(null)
@@ -59,7 +66,7 @@ const activeEngineObj = computed(() => {
   if (detectedBang.value) {
     return detectedBang.value.rule
   }
-  return engines.find(e => e.id === currentEngine.value) || engines[0]
+  return engines.value.find(e => e.id === currentEngine.value) || engines.value[0]
 })
 
 const isSwitcherVisible = computed(() => {

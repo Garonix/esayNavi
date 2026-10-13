@@ -1,4 +1,5 @@
 import type { NavConfig } from '../types/nav'
+import { DEFAULT_SEARCH_ENGINES } from '../utils/searchEngines'
 
 const LOCAL_STORAGE_KEY = 'easynavi_config_v6'
 
@@ -9,6 +10,7 @@ export const DEFAULT_CONFIG: NavConfig = {
     theme: 'light',
     background: 'white',
     searchEngine: 'google',
+    searchEngines: DEFAULT_SEARCH_ENGINES,
     openInNewTab: true,
     showClock: false,
     showSearch: true
@@ -63,6 +65,10 @@ export async function loadInitialConfig(): Promise<NavConfig> {
           }
           if (parsed.settings.customBackground && (parsed.settings.customBackground.type === 'particles' || (parsed.settings.customBackground.type as any) === 'video' || (parsed.settings.customBackground.type as any) === 'mesh')) {
             parsed.settings.customBackground.type = 'white'
+            needSave = true
+          }
+          if (!parsed.settings.searchEngines || !Array.isArray(parsed.settings.searchEngines) || parsed.settings.searchEngines.length === 0) {
+            parsed.settings.searchEngines = DEFAULT_SEARCH_ENGINES
             needSave = true
           }
         }

@@ -5,6 +5,8 @@ export interface SearchEngineItem {
   name: string
   icon: Component
   url: string
+  enabled?: boolean
+  isCustom?: boolean
 }
 
 // 品牌原生高品质 SVG 图标
@@ -47,6 +49,29 @@ export const DuckDuckGoIcon = () => h('svg', { viewBox: '0 0 24 24', class: 'w-3
   h('path', { fill: '#FFFFFF', d: 'M12 6c-3 0-5 2-5 5 0 1.5.8 2.8 2 3.5v2.5h6v-2.5c1.2-.7 2-2 2-3.5 0-3-2-5-5-5z' })
 ])
 
+// 通用自定义搜索图标
+export const DefaultSearchIcon = () => h('svg', { 
+  viewBox: '0 0 24 24', 
+  class: 'w-3.5 h-3.5 flex-shrink-0 text-slate-500', 
+  fill: 'none', 
+  stroke: 'currentColor', 
+  strokeWidth: '2', 
+  strokeLinecap: 'round', 
+  strokeLinejoin: 'round' 
+}, [
+  h('circle', { cx: '11', cy: '11', r: '8' }),
+  h('path', { d: 'm21 21-4.3-4.3' })
+])
+
+export const DEFAULT_SEARCH_ENGINES = [
+  { id: 'google', name: 'Google', icon: 'google', url: 'https://www.google.com/search?q=', enabled: true },
+  { id: 'bing', name: 'Bing', icon: 'bing', url: 'https://www.bing.com/search?q=', enabled: true },
+  { id: 'baidu', name: '百度', icon: 'baidu', url: 'https://www.baidu.com/s?wd=', enabled: true },
+  { id: 'github', name: 'GitHub', icon: 'github', url: 'https://github.com/search?q=', enabled: true },
+  { id: 'bilibili', name: 'B站', icon: 'bilibili', url: 'https://search.bilibili.com/all?keyword=', enabled: true },
+  { id: 'duckduckgo', name: 'DuckDuckGo', icon: 'duckduckgo', url: 'https://duckduckgo.com/?q=', enabled: true }
+]
+
 export const SEARCH_ENGINES: SearchEngineItem[] = [
   { id: 'google', name: 'Google', icon: GoogleIcon, url: 'https://www.google.com/search?q=' },
   { id: 'bing', name: 'Bing', icon: BingIcon, url: 'https://www.bing.com/search?q=' },
@@ -55,6 +80,46 @@ export const SEARCH_ENGINES: SearchEngineItem[] = [
   { id: 'bilibili', name: 'B站', icon: BilibiliIcon, url: 'https://search.bilibili.com/all?keyword=' },
   { id: 'duckduckgo', name: 'DuckDuckGo', icon: DuckDuckGoIcon, url: 'https://duckduckgo.com/?q=' }
 ]
+
+export function getEngineIcon(iconKey?: string): Component {
+  switch (iconKey?.toLowerCase()) {
+    case 'google': return GoogleIcon
+    case 'bing': return BingIcon
+    case 'baidu': return BaiduIcon
+    case 'github': return GitHubIcon
+    case 'bilibili': return BilibiliIcon
+    case 'duckduckgo': return DuckDuckGoIcon
+    default: return DefaultSearchIcon
+  }
+}
+
+export function resolveSearchEngines(configs?: any[]): SearchEngineItem[] {
+  const source = configs && configs.length > 0 ? configs : DEFAULT_SEARCH_ENGINES
+  return source.map(item => ({
+    id: item.id,
+    name: item.name,
+    url: item.url,
+    enabled: item.enabled !== false,
+    isCustom: !!item.isCustom,
+    icon: getEngineIcon(item.icon || item.id)
+  }))
+}
+
+// 智能构造搜索 URL（支持 %s 占位符或末尾自动拼接编码后的关键词）
+export function buildSearchUrl(template: string, query: string): string {
+  const cleanQuery = query.trim()
+  const encoded = encodeURIComponent(cleanQuery)
+  if (template.includes('%s')) {
+    return template.replace(/%s/g, encoded)
+  }
+  if (template.endsWith('=') || template.endsWith('&') || template.endsWith('?')) {
+    return template + encoded
+  }
+  if (template.includes('?')) {
+    return `${template}&q=${encoded}`
+  }
+  return `${template}?q=${encoded}`
+}
 
 // 智能 Bang 快捷语法规则映射表
 export const BANG_MAP: Record<string, SearchEngineItem> = {
