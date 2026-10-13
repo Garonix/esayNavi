@@ -61,7 +61,6 @@ const emit = defineEmits<{
   (e: 'editCategory', category: NavCategory): void
   (e: 'deleteCategory', categoryId: string): void
   (e: 'moveCategory', payload: { categoryId: string; direction: 'up' | 'down' }): void
-  (e: 'hoverSection', categoryId: string, isEntering: boolean): void
   (e: 'startReorder', payload: { categoryId: string; item: NavItem }): void
   (e: 'dragStartCard', payload: { categoryId: string; item: NavItem; index: number }): void
   (e: 'dragEndCard'): void
@@ -214,7 +213,6 @@ const collapseSection = () => {
 // 鼠标移入
 const handleMouseEnter = () => {
   isMouseInside.value = true
-  emit('hoverSection', props.category.id, true)
   // 若全局存在激活的右键菜单且不属于本分类，禁止误触扩展，保持绝对静止
   if (props.isAnyContextMenuActive && !props.isContextMenuActive) {
     return
@@ -225,7 +223,6 @@ const handleMouseEnter = () => {
 // 鼠标移出
 const handleMouseLeave = () => {
   isMouseInside.value = false
-  emit('hoverSection', props.category.id, false)
   // 若当前分类的右键菜单正在显示，绝对锁定展开，禁止收起！
   if (props.isContextMenuActive) {
     return

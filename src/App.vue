@@ -190,6 +190,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
   stopAutoScroll()
+  if (bottomLeaveTimer) {
+    clearTimeout(bottomLeaveTimer)
+    bottomLeaveTimer = null
+  }
   window.removeEventListener('keydown', handleGlobalKeydown)
   window.removeEventListener('pointermove', handleGlobalPointerMove)
   window.removeEventListener('pointerup', stopAutoScroll)
@@ -625,24 +629,35 @@ const handleDropUrlOnCategory = (categoryId: string, rawUrl: string) => {
   }
 }
 
+const isCreatingCategory = ref(false)
+
 const handleAddCategory = () => {
   const newCat: NavCategory = {
     id: 'cat-' + Date.now().toString(36),
-    name: '新建分类',
+    name: '',
     icon: 'folder',
     items: []
   }
-  config.value.categories.push(newCat)
-  persistChanges()
-  handleEditCategory(newCat)
+  isCreatingCategory.value = true
+  editingCategory.value = newCat
+  showCategoryModal.value = true
 }
 
 const handleEditCategory = (cat: NavCategory) => {
+  isCreatingCategory.value = false
   editingCategory.value = cat
   showCategoryModal.value = true
 }
 
 const handleSaveCategory = (updatedCat: NavCategory) => {
+  if (isCreatingCategory.value) {
+    config.value.categories.push(updatedCat)
+    persistChanges()
+    showToast('已新建分类')
+    isCreatingCategory.value = false
+    return
+  }
+
   const idx = config.value.categories.findIndex(c => c.id === updatedCat.id)
   if (idx !== -1) {
     config.value.categories[idx] = updatedCat
@@ -693,24 +708,29 @@ const isEditingLastCategory = computed(() => {
   return config.value.categories[config.value.categories.length - 1].id === editingCategory.value.id
 })
 
-// 底部“新建分类”悬停感知 (仅在最后一个分类 Hover 或触底时平滑淡入)
-const hoveredCategoryId = ref<string | null>(null)
-const isHoveringBottomTrigger = ref(false)
+// 页面下方区域“新建分类”悬停感知 (解绑最后一个分类，给下方区域加上充沛的感知热区，避免鼠标挪动中途失焦而闪烁消失)
+const isBottomHovered = ref(false)
+let bottomLeaveTimer: number | null = null
 
-const handleCategoryHover = (catId: string, isEntering: boolean) => {
-  if (isEntering) {
-    hoveredCategoryId.value = catId
-  } else if (hoveredCategoryId.value === catId) {
-    hoveredCategoryId.value = null
+const handleBottomMouseEnter = () => {
+  if (bottomLeaveTimer) {
+    clearTimeout(bottomLeaveTimer)
+    bottomLeaveTimer = null
   }
+  isBottomHovered.value = true
+}
+
+const handleBottomMouseLeave = () => {
+  if (bottomLeaveTimer) clearTimeout(bottomLeaveTimer)
+  bottomLeaveTimer = window.setTimeout(() => {
+    isBottomHovered.value = false
+  }, 240)
 }
 
 const isAddCategoryVisible = computed(() => {
   if (searchQuery.value.trim()) return false
   if (config.value.categories.length === 0) return true
-  const lastCat = config.value.categories[config.value.categories.length - 1]
-  if (!lastCat) return false
-  return hoveredCategoryId.value === lastCat.id || isHoveringBottomTrigger.value
+  return isBottomHovered.value
 })
 
 const handleExportFile = () => {
@@ -825,7 +845,6 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
             @edit-category="handleEditCategory"
             @delete-category="handleDeleteCategory"
             @move-category="handleMoveCategory"
-            @hover-section="handleCategoryHover"
             @start-reorder="handleStartReorder"
             @drag-start-card="handleDragStartCard"
             @drag-end-card="handleDragEndCard"
@@ -842,19 +861,19 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
           @search="handleSearchSubmit"
         />
 
-        <!-- 底部添加分类 (搜索态彻底不显示；正常主页平时隐藏，Hover最后一个分类或页面触底时淡入) -->
+        <!-- 页面下方悬停感知区 (给下方区域加上充沛的 hover 感知，按钮自然浮现，绝不中途消失) -->
         <div 
           v-if="!searchQuery.trim()"
-          @mouseenter="isHoveringBottomTrigger = true"
-          @mouseleave="isHoveringBottomTrigger = false"
-          class="w-full flex justify-center pt-2 pb-6 transition-all duration-300 ease-out"
-          :class="isAddCategoryVisible 
-            ? 'opacity-100 translate-y-0 pointer-events-auto' 
-            : 'opacity-0 translate-y-3 pointer-events-none'"
+          @mouseenter="handleBottomMouseEnter"
+          @mouseleave="handleBottomMouseLeave"
+          class="relative w-full pt-8 pb-14 mt-1 flex justify-center items-center"
         >
           <button
             @click="handleAddCategory"
-            class="group flex items-center gap-1.5 px-4 py-2 rounded-xl hover:bg-slate-100/80 text-slate-400 hover:text-blue-600 text-xs font-medium transition-all active:scale-95 select-none cursor-pointer"
+            class="group flex items-center gap-1.5 px-4 py-2 rounded-xl hover:bg-slate-100/90 text-slate-400 hover:text-blue-600 text-xs font-medium transition-all duration-300 ease-out active:scale-95 select-none cursor-pointer"
+            :class="isAddCategoryVisible 
+              ? 'opacity-100 translate-y-0 pointer-events-auto shadow-2xs' 
+              : 'opacity-0 translate-y-2 pointer-events-none'"
           >
             <FolderPlus class="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
             <span>新建分类</span>
@@ -936,9 +955,10 @@ const handleUpdateSettings = (newSettings: Partial<NavSettings>) => {
     <EditCategoryModal
       :show="showCategoryModal"
       :category="editingCategory"
+      :is-creating="isCreatingCategory"
       :is-first-category="isEditingFirstCategory"
       :is-last-category="isEditingLastCategory"
-      @close="showCategoryModal = false"
+      @close="showCategoryModal = false; isCreatingCategory = false"
       @save="handleSaveCategory"
       @delete="handleDeleteCategory"
       @move="handleModalMoveCategory"

@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { X, Folder, Sparkles, CodeXml, Palette, FolderEdit, Trash2, AlertTriangle, ChevronUp, ChevronDown } from 'lucide-vue-next'
+import { ref, watch, nextTick } from 'vue'
+import { X, Folder, Sparkles, CodeXml, Palette, FolderEdit, FolderPlus, Trash2, AlertTriangle, ChevronUp, ChevronDown } from 'lucide-vue-next'
 import type { NavCategory } from '../types/nav'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   show: boolean
   category: NavCategory | null
+  isCreating?: boolean
   isFirstCategory?: boolean
   isLastCategory?: boolean
-}>()
+}>(), {
+  isCreating: false,
+  isFirstCategory: false,
+  isLastCategory: false
+})
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -20,6 +25,7 @@ const emit = defineEmits<{
 const name = ref('')
 const icon = ref('folder')
 const showConfirmDelete = ref(false)
+const inputRef = ref<HTMLInputElement | null>(null)
 
 const iconOptions = [
   { id: 'folder', name: '常规', icon: Folder },
@@ -33,6 +39,12 @@ watch(
   (val) => {
     if (val) {
       showConfirmDelete.value = false
+      nextTick(() => {
+        inputRef.value?.focus()
+        if (props.isCreating && name.value) {
+          inputRef.value?.select()
+        }
+      })
     }
   }
 )
@@ -88,24 +100,25 @@ const handleConfirmDelete = () => {
         <div class="flex items-center justify-between mb-4">
           <div class="flex items-center gap-2">
             <div class="w-6 h-6 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
-              <FolderEdit class="w-3.5 h-3.5" />
+              <FolderPlus v-if="isCreating" class="w-3.5 h-3.5" />
+              <FolderEdit v-else class="w-3.5 h-3.5" />
             </div>
-            <h3 class="text-sm font-semibold text-slate-900">分类</h3>
+            <h3 class="text-sm font-semibold text-slate-900">{{ isCreating ? '新建分类' : '编辑分类' }}</h3>
           </div>
           <div class="flex items-center gap-1">
             <button
-              v-if="category && category.id !== 'flare' && category.id !== 'daily'"
+              v-if="!isCreating && category && category.id !== 'flare' && category.id !== 'daily'"
               type="button"
               @click="showConfirmDelete = true"
-              class="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-              title="删除"
+              class="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+              title="删除分类"
             >
               <Trash2 class="w-4 h-4" />
             </button>
             <button
               type="button"
               @click="$emit('close')"
-              class="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              class="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
             >
               <X class="w-4 h-4" />
             </button>
@@ -155,9 +168,11 @@ const handleConfirmDelete = () => {
           <div>
             <label class="block text-xs font-medium text-slate-600 mb-1.5">名称</label>
             <input
+              ref="inputRef"
               v-model="name"
               type="text"
-              placeholder="名称"
+              placeholder="请输入分类名称"
+              @keydown.enter.prevent="handleSave"
               class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
             />
           </div>
@@ -170,7 +185,7 @@ const handleConfirmDelete = () => {
                 :key="opt.id"
                 type="button"
                 @click="icon = opt.id"
-                class="flex items-center gap-2 p-2 rounded-xl text-xs font-medium border transition-all duration-150 active:scale-95"
+                class="flex items-center gap-2 p-2 rounded-xl text-xs font-medium border transition-all duration-150 active:scale-95 cursor-pointer"
                 :class="icon === opt.id 
                   ? 'bg-blue-50 border-blue-400 text-blue-600 shadow-2xs font-semibold' 
                   : 'bg-slate-50/80 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100'"
@@ -181,7 +196,8 @@ const handleConfirmDelete = () => {
             </div>
           </div>
 
-          <div>
+          <!-- 显示顺序 (仅在编辑已有分类时展示) -->
+          <div v-if="!isCreating">
             <label class="block text-xs font-medium text-slate-600 mb-1.5">显示顺序</label>
             <div class="flex items-center gap-2">
               <button
@@ -215,16 +231,20 @@ const handleConfirmDelete = () => {
             <button
               type="button"
               @click="$emit('close')"
-              class="px-3 py-1.5 rounded-xl text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+              class="px-3 py-1.5 rounded-xl text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
             >
               取消
             </button>
             <button
               type="button"
+              :disabled="!name.trim()"
               @click="handleSave"
-              class="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-medium shadow-xs shadow-blue-500/25 transition-all"
+              class="px-4 py-1.5 rounded-xl text-xs font-medium transition-all"
+              :class="name.trim() 
+                ? 'bg-blue-600 hover:bg-blue-700 active:scale-95 text-white shadow-xs shadow-blue-500/25 cursor-pointer' 
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed'"
             >
-              保存
+              {{ isCreating ? '创建' : '保存' }}
             </button>
           </div>
         </div>
