@@ -767,7 +767,7 @@ const getCategoryIcon = (iconName?: string) => {
             type="button"
             @click.stop="$emit('moveCategory', { categoryId: category.id, direction: 'up' })"
             class="p-0.5 rounded hover:bg-slate-200/70 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
-            title="上移分类"
+            title="上移"
           >
             <ChevronUp class="w-3 h-3" />
           </button>
@@ -776,7 +776,7 @@ const getCategoryIcon = (iconName?: string) => {
             type="button"
             @click.stop="$emit('moveCategory', { categoryId: category.id, direction: 'down' })"
             class="p-0.5 rounded hover:bg-slate-200/70 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
-            title="下移分类"
+            title="下移"
           >
             <ChevronDown class="w-3 h-3" />
           </button>

@@ -359,14 +359,9 @@ const handleMediaUpload = async (e: Event) => {
                   </button>
                 </div>
 
-                <!-- 单行图标数量 (调节间距实现数量变化) -->
+                <!-- 单行图标数量 -->
                 <div class="space-y-1.5">
-                  <div class="flex items-center justify-between text-xs text-slate-600 px-1">
-                    <span>单行图标数量</span>
-                    <span class="text-[11px] text-slate-400 font-normal">
-                      {{ (config.settings.cardDensity === 'compact') ? '紧凑 · 容纳更多' : (config.settings.cardDensity === 'relaxed') ? '宽松 · 容纳较少' : '标准' }}
-                    </span>
-                  </div>
+                  <span class="text-xs text-slate-600 px-1 block">单行图标数量</span>
                   <div class="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-xl">
                     <button
                       v-for="d in [
@@ -387,14 +382,9 @@ const handleMediaUpload = async (e: Event) => {
                   </div>
                 </div>
 
-                <!-- 分类显示间距 -->
+                <!-- 分类间距 -->
                 <div class="space-y-1.5">
-                  <div class="flex items-center justify-between text-xs text-slate-600 px-1">
-                    <span>分类显示间距</span>
-                    <span class="text-[11px] text-slate-400 font-normal">
-                      {{ (config.settings.categorySpacing === 'compact') ? '紧凑小间距' : (config.settings.categorySpacing === 'relaxed') ? '开阔大间距' : '标准间距' }}
-                    </span>
-                  </div>
+                  <span class="text-xs text-slate-600 px-1 block">分类间距</span>
                   <div class="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-xl">
                     <button
                       v-for="s in [
@@ -415,20 +405,17 @@ const handleMediaUpload = async (e: Event) => {
                   </div>
                 </div>
 
-                <!-- 搜索引擎管理 (空状态胶囊与默认主引擎) -->
+                <!-- 搜索引擎 -->
                 <div class="space-y-2 pt-2 border-t border-slate-100">
                   <div class="flex items-center justify-between px-1">
-                    <div>
-                      <span class="text-xs font-medium text-slate-700 block">搜索引擎</span>
-                      <span class="text-[10px] text-slate-400">管理空状态直达胶囊与默认回车引擎</span>
-                    </div>
+                    <span class="text-xs font-medium text-slate-700">搜索引擎</span>
                     <button
                       type="button"
                       @click="resetDefaultEngines"
                       class="text-[10px] text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
-                      title="重置为默认引擎列表"
+                      title="重置"
                     >
-                      重置默认
+                      重置
                     </button>
                   </div>
 
@@ -452,7 +439,7 @@ const handleMediaUpload = async (e: Event) => {
                               v-if="config.settings.searchEngine === eng.id"
                               class="px-1.5 py-0.2 rounded-md bg-blue-50 text-blue-600 text-[9px] font-semibold border border-blue-200/60 flex-shrink-0"
                             >
-                              默认回车
+                              默认
                             </span>
                           </div>
                           <span class="text-[10px] text-slate-400 truncate block font-mono">{{ eng.url }}</span>
@@ -461,29 +448,26 @@ const handleMediaUpload = async (e: Event) => {
 
                       <!-- 右侧操作栏: 设为默认 + 显示开关 + 排序 + 删除 -->
                       <div class="flex items-center gap-1 flex-shrink-0">
-                        <!-- 设为默认按钮 -->
                         <button
                           v-if="config.settings.searchEngine !== eng.id"
                           type="button"
                           @click="setDefaultEngine(eng.id)"
                           class="px-1.5 py-0.5 rounded text-[10px] text-slate-400 hover:text-blue-600 hover:bg-white transition-colors cursor-pointer"
-                          title="设为默认回车引擎"
+                          title="设为默认"
                         >
-                          设为默认
+                          默认
                         </button>
 
-                        <!-- 显示/隐藏在胶囊流中 -->
                         <button
                           type="button"
                           @click="toggleEngineEnabled(eng.id)"
                           class="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-white transition-colors cursor-pointer"
-                          :title="eng.enabled ? '在胶囊流中显示 (点击隐藏)' : '已在胶囊流中隐藏 (点击显示)'"
+                          :title="eng.enabled ? '显示' : '隐藏'"
                         >
                           <Eye v-if="eng.enabled" class="w-3 h-3 text-blue-600" />
                           <EyeOff v-else class="w-3 h-3 text-slate-300" />
                         </button>
 
-                        <!-- 排序微箭头 -->
                         <button
                           v-if="eIdx > 0"
                           type="button"
@@ -503,13 +487,12 @@ const handleMediaUpload = async (e: Event) => {
                           <ChevronDown class="w-3 h-3" />
                         </button>
 
-                        <!-- 自定义引擎删除按钮 -->
                         <button
                           v-if="eng.isCustom"
                           type="button"
                           @click="removeEngine(eng.id)"
                           class="p-1 rounded text-rose-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer ml-0.5"
-                          title="删除此搜索引擎"
+                          title="删除"
                         >
                           <Trash2 class="w-3 h-3" />
                         </button>
@@ -517,7 +500,7 @@ const handleMediaUpload = async (e: Event) => {
                     </div>
                   </div>
 
-                  <!-- 添加自定义搜索引擎表单/按钮 -->
+                  <!-- 添加引擎表单/按钮 -->
                   <div v-if="!showAddEngineForm" class="pt-1">
                     <button
                       type="button"
@@ -525,7 +508,7 @@ const handleMediaUpload = async (e: Event) => {
                       class="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl border border-dashed border-slate-200 hover:border-blue-400 text-slate-500 hover:text-blue-600 hover:bg-blue-50/30 text-xs transition-all cursor-pointer"
                     >
                       <Plus class="w-3.5 h-3.5" />
-                      <span>添加搜索引擎</span>
+                      <span>添加</span>
                     </button>
                   </div>
 
@@ -534,23 +517,20 @@ const handleMediaUpload = async (e: Event) => {
                     v-else 
                     class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/90 space-y-2"
                   >
-                    <div class="text-xs font-semibold text-slate-700">添加自定义搜索引擎</div>
+                    <div class="text-xs font-semibold text-slate-700">添加引擎</div>
                     <div class="space-y-1.5">
                       <input
                         v-model="newEngineName"
                         type="text"
-                        placeholder="引擎名称 (如: 知乎)"
+                        placeholder="名称"
                         class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 transition-colors"
                       />
                       <input
                         v-model="newEngineUrl"
                         type="text"
-                        placeholder="搜索网址 (如: https://www.zhihu.com/search?type=content&q=%s)"
+                        placeholder="网址，支持 %s"
                         class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500 font-mono transition-colors"
                       />
-                      <p class="text-[10px] text-slate-400 leading-tight">
-                        提示: 支持在网址中使用 <code class="font-mono text-blue-600">%s</code> 占位符，或直接以搜索参数结尾。
-                      </p>
                       <p v-if="addEngineError" class="text-[10px] text-rose-500 font-medium">
                         {{ addEngineError }}
                       </p>
@@ -569,7 +549,7 @@ const handleMediaUpload = async (e: Event) => {
                         @click="handleAddEngine"
                         class="px-3 py-1 rounded-lg text-xs font-medium bg-blue-600 hover:bg-blue-700 active:scale-95 text-white transition-all cursor-pointer shadow-2xs"
                       >
-                        保存添加
+                        添加
                       </button>
                     </div>
                   </div>
@@ -577,7 +557,7 @@ const handleMediaUpload = async (e: Event) => {
               </div>
             </div>
 
-            <!-- 3. 数据管理 (去除繁杂不知所云的物理文件概念，只保留核心导入/导出) -->
+            <!-- 3. 数据 -->
             <div class="space-y-2 pt-3 border-t border-slate-100">
               <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
                 <HardDrive class="w-3.5 h-3.5 text-blue-600" />
@@ -591,7 +571,7 @@ const handleMediaUpload = async (e: Event) => {
                     class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 border border-slate-200 transition-all active:scale-[0.98]"
                   >
                     <Download class="w-3.5 h-3.5 text-slate-500" />
-                    <span>导出配置</span>
+                    <span>导出</span>
                   </button>
 
                   <button
@@ -599,7 +579,7 @@ const handleMediaUpload = async (e: Event) => {
                     class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 border border-slate-200 transition-all active:scale-[0.98]"
                   >
                     <Upload class="w-3.5 h-3.5 text-slate-500" />
-                    <span>导入配置</span>
+                    <span>导入</span>
                   </button>
                   <input
                     ref="fileInputRef"

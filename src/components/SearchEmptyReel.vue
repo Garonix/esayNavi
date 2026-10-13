@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { Search, CornerDownLeft } from 'lucide-vue-next'
+import { CornerDownLeft } from 'lucide-vue-next'
 import { resolveSearchEngines, type SearchEngineItem } from '../utils/searchEngines'
 import type { SearchEngineItemConfig } from '../types/nav'
 
@@ -47,25 +47,13 @@ const handleSelectEngine = (engine: SearchEngineItem) => {
 <template>
   <div 
     v-if="show"
-    class="empty-reel-wrapper w-full max-w-2xl mx-auto py-8 select-none"
+    class="empty-reel-wrapper w-full max-w-2xl mx-auto py-6 select-none"
   >
     <!-- 物理卷轴容器 (基于贝塞尔曲线展开) -->
     <div 
-      class="scroll-reel-box overflow-hidden rounded-2xl px-4 py-5 flex flex-col items-center"
+      class="scroll-reel-box overflow-hidden rounded-2xl px-4 py-3 flex flex-col items-center"
       :class="isRevealed ? 'reel-open' : 'reel-closed'"
     >
-      <!-- 极简引导提示行 -->
-      <div 
-        class="flex items-center gap-1.5 text-xs text-slate-500 mb-4 transition-all duration-200"
-        :style="{
-          opacity: isRevealed ? 1 : 0,
-          transform: isRevealed ? 'translateY(0)' : 'translateY(-4px)'
-        }"
-      >
-        <Search class="w-3.5 h-3.5 text-slate-400" />
-        <span>未匹配到本地站点，按 <kbd class="px-1.5 py-0.5 text-[10px] font-mono bg-slate-100 border border-slate-200/80 rounded text-slate-600 shadow-2xs">Enter</kbd> 或点击下方引擎直达：</span>
-      </div>
-
       <!-- 引擎横向画卷胶囊流 (波浪级联延时展开) -->
       <div class="flex items-center justify-center flex-wrap gap-2.5 w-full">
         <button
@@ -83,7 +71,7 @@ const handleSelectEngine = (engine: SearchEngineItem) => {
             transform: isRevealed ? 'translateY(0) scale(1)' : 'translateY(8px) scale(0.96)',
             transitionDelay: isRevealed ? `${idx * 28}ms` : '0ms'
           }"
-          :title="`使用 ${engine.name} 搜索`"
+          :title="engine.name"
         >
           <component 
             :is="engine.icon" 

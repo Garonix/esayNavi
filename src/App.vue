@@ -640,14 +640,14 @@ const handleSaveCategory = (updatedCat: NavCategory) => {
     c.id !== updatedCat.id && c.name.trim().toLowerCase() === cleanName
   )
   if (isDuplicate) {
-    showToast('分类名称已存在')
+    showToast('名称已存在')
     return
   }
 
   if (isCreatingCategory.value) {
     config.value.categories.push(updatedCat)
     persistChanges()
-    showToast('已新建分类')
+    showToast('已创建')
     isCreatingCategory.value = false
     return
   }
@@ -684,7 +684,7 @@ const handleMoveCategory = (payload: { categoryId: string; direction: 'up' | 'do
   list[targetIdx] = temp
 
   persistChanges()
-  showToast(direction === 'up' ? '已上移分类' : '已下移分类')
+  showToast(direction === 'up' ? '已上移' : '已下移')
 }
 
 const handleModalMoveCategory = (direction: 'up' | 'down') => {

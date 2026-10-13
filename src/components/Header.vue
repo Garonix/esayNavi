@@ -207,7 +207,7 @@ onUnmounted(() => {
                 class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-colors select-none"
                 :class="detectedBang ? 'bg-blue-50 text-blue-700 font-medium' : 'hover:bg-slate-100/90 text-slate-600'"
                 type="button"
-                :title="detectedBang ? `Bang 快速直达: ${detectedBang.rule.name}` : '切换搜索引擎'"
+                :title="detectedBang ? detectedBang.rule.name : '搜索引擎'"
               >
                 <component :is="activeEngineObj.icon" class="w-3.5 h-3.5" />
                 <span class="font-medium text-xs hidden sm:inline">{{ activeEngineObj.name }}</span>
@@ -259,7 +259,7 @@ onUnmounted(() => {
             @input="$emit('update:searchQuery', ($event.target as HTMLInputElement).value); $emit('clearFocus')"
             @keydown="handleInputKeydown"
             type="text"
-            placeholder="搜索或拼音"
+            placeholder="搜索"
             class="w-full bg-transparent px-2.5 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none"
           />
         </div>
@@ -278,7 +278,7 @@ onUnmounted(() => {
             <div 
               v-if="hasActiveCardFocus && focusedCardTitle"
               class="hidden sm:flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-blue-50 border border-blue-200/60 text-[10px] text-blue-700 font-medium select-none"
-              title="按 Enter 直达选中的卡片"
+              title="直达"
             >
               <CornerDownLeft class="w-2.5 h-2.5 text-blue-500" />
               <span class="max-w-[70px] truncate">{{ focusedCardTitle }}</span>
@@ -288,10 +288,10 @@ onUnmounted(() => {
             <div 
               v-else-if="detectedDirectUrl"
               class="hidden sm:flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-emerald-50 border border-emerald-200/60 text-[10px] text-emerald-700 font-medium select-none"
-              title="按 Enter 直接访问该网址"
+              title="访问"
             >
               <ExternalLink class="w-2.5 h-2.5 text-emerald-600" />
-              <span>直接访问</span>
+              <span>直达</span>
             </div>
           </transition>
 
@@ -309,7 +309,7 @@ onUnmounted(() => {
             :class="detectedDirectUrl && !hasActiveCardFocus 
               ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-600' 
               : 'bg-blue-50 hover:bg-blue-100 text-blue-600'"
-            :title="hasActiveCardFocus ? '回车直达卡片' : (detectedDirectUrl ? '回车直接访问网址' : '搜索')"
+            :title="hasActiveCardFocus ? '直达' : (detectedDirectUrl ? '访问' : '搜索')"
           >
             <CornerDownLeft v-if="hasActiveCardFocus" class="w-3.5 h-3.5" />
             <ExternalLink v-else-if="detectedDirectUrl" class="w-3.5 h-3.5" />

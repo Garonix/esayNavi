@@ -552,7 +552,7 @@ const handleSave = () => {
                   class="flex items-center gap-1 px-2.5 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 rounded-lg font-medium transition-colors cursor-pointer shadow-2xs"
                 >
                   <Trash2 class="w-3.5 h-3.5" />
-                  <span>批量删除</span>
+                  <span>删除</span>
                 </button>
               </div>
             </div>
@@ -709,16 +709,16 @@ const handleSave = () => {
                               type="button"
                               @click="handleDeleteCategoryClick(catName, $event)"
                               class="px-1.5 py-0.5 text-[10px] bg-rose-500 text-white rounded hover:bg-rose-600 font-medium transition-colors"
-                              title="点击确认删除分类"
+                              title="确认"
                             >
-                              确认删除
+                              确认
                             </button>
                             <button
                               v-else
                               type="button"
                               @click="handleDeleteCategoryClick(catName, $event)"
                               class="p-0.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded transition-colors opacity-0 group-hover/cat:opacity-100"
-                              title="删除分类"
+                              title="删除"
                             >
                               <X class="w-3 h-3" />
                             </button>
@@ -746,14 +746,14 @@ const handleSave = () => {
                       <input
                         v-model="row.icon"
                         type="text"
-                        placeholder="图标链接"
+                        placeholder="图标"
                         class="flex-1 bg-transparent hover:bg-slate-100/60 focus:bg-white border border-transparent hover:border-slate-200 focus:border-blue-500 rounded-lg px-2 py-1 text-xs text-slate-800 font-mono focus:outline-none transition-colors truncate"
                       />
 
                       <button
                         type="button"
                         @click="triggerUpload(row)"
-                        title="上传图片"
+                        title="上传"
                         class="p-1 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 border border-slate-200/80 bg-white flex-shrink-0 transition-colors"
                       >
                         <Upload class="w-3.5 h-3.5" />
@@ -791,7 +791,7 @@ const handleSave = () => {
               </span>
               <span v-if="hasIncompleteRows" class="text-amber-500 flex items-center gap-1 font-medium">
                 <AlertCircle class="w-3.5 h-3.5" />
-                <span>请补全名称与网址</span>
+                <span>待补全</span>
               </span>
             </div>
 
@@ -813,7 +813,7 @@ const handleSave = () => {
                   ? 'bg-slate-200 text-slate-400 opacity-50 cursor-not-allowed'
                   : 'text-white bg-blue-600 hover:bg-blue-700 active:scale-95 cursor-pointer'"
               >
-                保存并应用
+                保存
               </button>
             </div>
           </div>

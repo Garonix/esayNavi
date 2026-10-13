@@ -184,7 +184,7 @@ const handleConfirmDelete = () => {
               ref="inputRef"
               v-model="name"
               type="text"
-              placeholder="请输入分类名称"
+              placeholder="名称"
               @keydown.enter.prevent="handleSave"
               class="w-full bg-slate-50 border rounded-xl px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:bg-white transition-all"
               :class="isDuplicateName 
@@ -193,7 +193,7 @@ const handleConfirmDelete = () => {
             />
             <p v-if="isDuplicateName" class="text-[11px] text-rose-500 font-medium mt-1 flex items-center gap-1">
               <AlertTriangle class="w-3 h-3 text-rose-500" />
-              <span>该分类名称已存在，请换一个名称</span>
+              <span>名称已存在</span>
             </p>
           </div>
 
@@ -216,9 +216,9 @@ const handleConfirmDelete = () => {
             </div>
           </div>
 
-          <!-- 显示顺序 (仅在编辑已有分类时展示) -->
+          <!-- 排序 (仅在编辑已有分类时展示) -->
           <div v-if="!isCreating">
-            <label class="block text-xs font-medium text-slate-600 mb-1.5">显示顺序</label>
+            <label class="block text-xs font-medium text-slate-600 mb-1.5">排序</label>
             <div class="flex items-center gap-2">
               <button
                 type="button"
