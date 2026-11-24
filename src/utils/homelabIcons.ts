@@ -76,6 +76,8 @@ const HOMELAB_MAP: Record<string, string> = {
   'stirling': 'stirling-pdf.png',
   'anirss': 'freshrss.png',
   'freshrss': 'freshrss.png',
+  'rssui': 'freshrss.png',
+  'rss': 'freshrss.png',
 
   // 终端与运维管理
   'nexterm': 'powershell.png',

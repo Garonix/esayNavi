@@ -55,7 +55,6 @@ export interface GridReorderOptions {
   categoryId: () => string
   isReorderMode: () => boolean
   onStartReorder: (payload: { categoryId: string; item: NavItem }) => void
-  onDragStartCard: (payload: { categoryId: string; item: NavItem; index: number }) => void
   onDragEndCard: () => void
   onDropCard: (payload: { targetCategoryId: string; targetIndex: number }) => void
 }
@@ -170,7 +169,6 @@ export function useGridReorder(options: GridReorderOptions) {
         setFloatingCard(activePointerItem, e.clientX, e.clientY)
         setDraggedCard({ categoryId: catId, item: activePointerItem, index: activePointerIndex })
         setDragHoverTarget({ categoryId: catId, index: activePointerIndex })
-        options.onDragStartCard({ categoryId: catId, item: activePointerItem, index: activePointerIndex })
       }
     }
 

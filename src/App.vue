@@ -337,15 +337,9 @@ const handleDeleteItem = (item: NavItem) => {
 
 // 图标位置调整模式
 const isReorderMode = ref(false)
-const draggedCardInfo = ref<{
-  categoryId: string
-  item: NavItem
-  index: number
-} | null>(null)
 
 const handleStartReorder = (payload?: { categoryId: string; item: NavItem } | NavItem) => {
   clearDragState()
-  draggedCardInfo.value = null
   isReorderMode.value = true
   if (contextMenuState.value.show) {
     handleCloseContextMenu()
@@ -369,27 +363,20 @@ watch(isReorderMode, (val) => {
   if (!val) {
     stopAutoScroll()
     clearDragState()
-    draggedCardInfo.value = null
   }
 })
 
-const handleDragStartCard = (payload: { categoryId: string; item: NavItem; index: number }) => {
-  draggedCardInfo.value = payload
-}
-
 const handleDragEndCard = () => {
   stopAutoScroll()
-  draggedCardInfo.value = null
 }
 
 const handleDropCard = ({ targetCategoryId, targetIndex }: { targetCategoryId: string; targetIndex: number }) => {
   stopAutoScroll()
-  const currentDrag = getDraggedCard() || draggedCardInfo.value
+  const currentDrag = getDraggedCard()
   if (!currentDrag) return
 
   moveOrReorderCard(currentDrag.categoryId, currentDrag.item.id, targetCategoryId, targetIndex)
   clearDragState()
-  draggedCardInfo.value = null
 }
 
 const handleOpenContextMenu = (payload: { item: NavItem; x: number; y: number; categoryId?: string }) => {
@@ -549,7 +536,6 @@ const handleResetDefault = async () => {
             :is-context-menu-active="activeContextMenuCategoryId === cat.id"
             :is-any-context-menu-active="contextMenuState.show"
             :is-reorder-mode="isReorderMode"
-            :dragged-card="draggedCardInfo"
             :focused-card-id="activeFocusedCard?.id"
             :is-first-category="idx === 0"
             :is-last-category="idx === filteredCategories.length - 1"
@@ -562,7 +548,6 @@ const handleResetDefault = async () => {
             @delete-category="deleteCategory"
             @move-category="handleMoveCategory"
             @start-reorder="handleStartReorder"
-            @drag-start-card="handleDragStartCard"
             @drag-end-card="handleDragEndCard"
             @drop-card="handleDropCard"
           />

@@ -6,14 +6,63 @@ import {
   saveConfigToLocal,
   exportConfigFile,
   importConfigFile,
-  clearLocalConfig
+  clearLocalConfig,
+  normalizeConfig
 } from '../services/storage'
-import { initIconCache, saveCachedIcon, removeCachedIcon } from '../services/iconCache'
+import {
+  initIconCache,
+  saveCachedIcon,
+  removeCachedIcon,
+  bumpIconVersion
+} from '../services/iconCache'
 import { resolveSiteFavicon } from '../services/faviconFetcher'
 import { extractSiteTitle, getFaviconUrl, normalizeUrl } from '../utils/urlHelper'
 
 /**
- * 统一导航配置与状态管理 Store（单一事实来源 + 持久化闭环）
+ * 对比前后配置，提取在新配置中已失效的图标缓存键（用于表格全量保存/导入时的缓存回收）
+ */
+export function collectStaleIconCacheKeys(prevConfig: NavConfig, nextConfig: NavConfig): string[] {
+  const activeKeys = new Set<string>()
+  const nextItemsById = new Map<string, NavItem>()
+
+  for (const cat of nextConfig.categories || []) {
+    for (const item of cat.items || []) {
+      nextItemsById.set(item.id, item)
+      if (item.url) activeKeys.add(item.url)
+      const explicitIcon = item.icon?.trim()
+      if (explicitIcon && !explicitIcon.startsWith('data:')) {
+        activeKeys.add(explicitIcon)
+      }
+    }
+  }
+
+  const staleKeys = new Set<string>()
+  for (const cat of prevConfig.categories || []) {
+    for (const prevItem of cat.items || []) {
+      const nextItem = nextItemsById.get(prevItem.id)
+      const isRemoved = !nextItem
+      const isModified =
+        !!nextItem &&
+        (nextItem.url !== prevItem.url || (nextItem.icon || '').trim() !== (prevItem.icon || '').trim())
+
+      if (isRemoved || isModified) {
+        if (prevItem.id) staleKeys.add(prevItem.id)
+        if (prevItem.url && !activeKeys.has(prevItem.url)) {
+          staleKeys.add(prevItem.url)
+        }
+        const prevIcon = prevItem.icon?.trim()
+        if (prevIcon && !prevIcon.startsWith('data:') && !activeKeys.has(prevIcon)) {
+          staleKeys.add(prevIcon)
+        }
+      }
+    }
+  }
+
+  return Array.from(staleKeys)
+}
+
+/**
+ * 统一导航配置与状态管理 Store（单一事实来源 + 持久化与缓存回收闭环）
  */
 export function useNavStore() {
   const config = ref<NavConfig>(createDefaultConfig())
@@ -33,6 +82,44 @@ export function useNavStore() {
     saveConfigToLocal(config.value)
   }
 
+  const findItemInStore = (itemId: string): NavItem | null => {
+    for (const cat of config.value.categories) {
+      const found = cat.items.find(i => i.id === itemId)
+      if (found) return found
+    }
+    return null
+  }
+
+  const cacheResolvedIcon = async (siteUrl: string, resolvedIcon: string) => {
+    if (!resolvedIcon.startsWith('data:')) {
+      await saveCachedIcon(resolvedIcon, resolvedIcon)
+    }
+    if (siteUrl) {
+      await saveCachedIcon(siteUrl, resolvedIcon)
+    }
+  }
+
+  /**
+   * 后台静默探测真实站点图标并持久化（用于新建卡片/拖入链接，消除“新建后还需手动右键刷新”的割裂）
+   */
+  const resolveAndUpgradeNewItemIcon = async (itemId: string, siteUrl: string, siteTitle?: string) => {
+    try {
+      const newIcon = await resolveSiteFavicon(siteUrl, siteTitle)
+      if (!newIcon) return
+
+      const target = findItemInStore(itemId)
+      // 若卡片已被删除或用户期间已修改网址/上传了自定义 data 图标，则不覆盖
+      if (!target || target.url !== siteUrl || target.icon?.startsWith('data:')) return
+
+      target.icon = newIcon
+      await cacheResolvedIcon(siteUrl, newIcon)
+      bumpIconVersion(itemId)
+      persist()
+    } catch {
+      // 静默回退至已有默认图标
+    }
+  }
+
   const initStore = async () => {
     await initIconCache()
     config.value = await loadInitialConfig()
@@ -48,8 +135,13 @@ export function useNavStore() {
   }
 
   const updateFullConfig = (newConfig: NavConfig, toast = '已保存') => {
-    config.value = newConfig
+    const { config: normalized } = normalizeConfig(newConfig)
+    const staleKeys = collectStaleIconCacheKeys(config.value, normalized)
+    config.value = normalized
     persist()
+    if (staleKeys.length > 0) {
+      Promise.all(staleKeys.map(key => removeCachedIcon(key))).catch(() => {})
+    }
     if (toast) showToast(toast)
   }
 
@@ -60,14 +152,18 @@ export function useNavStore() {
 
   const importConfig = async (file: File) => {
     const imported = await importConfigFile(file)
-    config.value = imported
-    persist()
-    showToast('已导入')
+    updateFullConfig(imported, '已导入')
   }
 
   const resetToDefault = async () => {
+    const previous = config.value
     clearLocalConfig()
-    config.value = await loadInitialConfig()
+    const reloaded = await loadInitialConfig()
+    const staleKeys = collectStaleIconCacheKeys(previous, reloaded)
+    config.value = reloaded
+    if (staleKeys.length > 0) {
+      Promise.all(staleKeys.map(key => removeCachedIcon(key))).catch(() => {})
+    }
     showToast('已重置')
   }
 
@@ -89,12 +185,12 @@ export function useNavStore() {
       }
     }
 
-    // 若 URL 或显式图标发生变化，清除旧图标缓存防止误命中
     if (previousItem) {
       if (previousItem.url !== item.url || previousItem.icon !== item.icon) {
         await removeCachedIcon(previousItem.id)
         if (previousItem.icon) await removeCachedIcon(previousItem.icon)
         if (previousItem.url) await removeCachedIcon(previousItem.url)
+        bumpIconVersion(item.id)
       }
     }
 
@@ -111,6 +207,11 @@ export function useNavStore() {
       }
       persist()
       showToast('已保存')
+
+      // 全新站点且非用户手动上传的 DataURL 图标：后台静默异步探测真实图标并固化
+      if (!previousItem && !item.icon?.startsWith('data:')) {
+        void resolveAndUpgradeNewItemIcon(item.id, item.url, item.title)
+      }
     }
   }
 
@@ -158,8 +259,12 @@ export function useNavStore() {
       const newIcon = await resolveSiteFavicon(item.url, item.title)
       if (newIcon) {
         item.icon = newIcon
-        await saveCachedIcon(newIcon, newIcon)
-        await saveCachedIcon(item.url, newIcon)
+        const target = findItemInStore(item.id)
+        if (target) {
+          target.icon = newIcon
+        }
+        await cacheResolvedIcon(item.url, newIcon)
+        bumpIconVersion(item.id)
         persist()
         showToast('已更新')
       } else {
@@ -191,6 +296,9 @@ export function useNavStore() {
       cat.items.push(newItem)
       persist()
       showToast('已添加')
+      if (!newItem.icon?.startsWith('data:')) {
+        void resolveAndUpgradeNewItemIcon(newItem.id, newItem.url, newItem.title)
+      }
     }
   }
 
@@ -226,11 +334,17 @@ export function useNavStore() {
 
   const deleteCategory = (categoryId: string) => {
     const idx = config.value.categories.findIndex(c => c.id === categoryId)
-    if (idx !== -1) {
-      config.value.categories.splice(idx, 1)
-      persist()
-      showToast('已删除')
+    if (idx === -1) return
+    const [removed] = config.value.categories.splice(idx, 1)
+    const staleKeys = collectStaleIconCacheKeys(
+      { ...config.value, categories: [removed] },
+      config.value
+    )
+    persist()
+    if (staleKeys.length > 0) {
+      Promise.all(staleKeys.map(key => removeCachedIcon(key))).catch(() => {})
     }
+    showToast('已删除')
   }
 
   const moveCategory = (categoryId: string, direction: 'up' | 'down') => {

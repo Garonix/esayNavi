@@ -4,12 +4,27 @@
  * 避免每次刷新页面或重新打开浏览器时重复发送网络请求，实现图标毫秒级瞬开。
  */
 
+import { ref } from 'vue'
+
 const DB_NAME = 'easynavi_icon_cache_v3'
 const STORE_NAME = 'icons'
 const DB_VERSION = 1
 
 // 内存一级缓存 (当前会话极速直出)
 const memoryCache = new Map<string, string>()
+
+// 响应式图标刷新版本号：用于同 URL 刷新时强制重置 <img> 错误状态并重新加载
+const iconVersions = ref<Record<string, number>>({})
+
+export function bumpIconVersion(id: string): void {
+  if (!id) return
+  iconVersions.value[id] = (iconVersions.value[id] || 0) + 1
+}
+
+export function getIconVersion(id: string): number {
+  if (!id) return 0
+  return iconVersions.value[id] || 0
+}
 
 let dbPromise: Promise<IDBDatabase> | null = null
 

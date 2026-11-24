@@ -31,7 +31,6 @@ const props = withDefaults(defineProps<{
   isContextMenuActive?: boolean
   isAnyContextMenuActive?: boolean
   isReorderMode?: boolean
-  draggedCard?: { categoryId: string; item: NavItem; index: number } | null
   focusedCardId?: string | null
   isFirstCategory?: boolean
   isLastCategory?: boolean
@@ -42,7 +41,6 @@ const props = withDefaults(defineProps<{
   isContextMenuActive: false,
   isAnyContextMenuActive: false,
   isReorderMode: false,
-  draggedCard: null,
   focusedCardId: null,
   isFirstCategory: false,
   isLastCategory: false,
@@ -60,7 +58,6 @@ const emit = defineEmits<{
   (e: 'deleteCategory', categoryId: string): void
   (e: 'moveCategory', payload: { categoryId: string; direction: 'up' | 'down' }): void
   (e: 'startReorder', payload: { categoryId: string; item: NavItem }): void
-  (e: 'dragStartCard', payload: { categoryId: string; item: NavItem; index: number }): void
   (e: 'dragEndCard'): void
   (e: 'dropCard', payload: { targetCategoryId: string; targetIndex: number }): void
 }>()
@@ -443,7 +440,6 @@ const { handleCardPointerDown, handleCardStartReorder } = useGridReorder({
   categoryId: () => props.category.id,
   isReorderMode: () => !!props.isReorderMode,
   onStartReorder: (payload) => emit('startReorder', payload),
-  onDragStartCard: (payload) => emit('dragStartCard', payload),
   onDragEndCard: () => emit('dragEndCard'),
   onDropCard: (payload) => emit('dropCard', payload)
 })

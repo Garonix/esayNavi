@@ -3,7 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { GripVertical } from 'lucide-vue-next'
 import type { NavItem } from '../types/nav'
 import { getFallbackAvatar, getFaviconUrl } from '../utils/urlHelper'
-import { getCachedIconSync, cacheIconFromImageElement } from '../services/iconCache'
+import { getCachedIconSync, cacheIconFromImageElement, getIconVersion } from '../services/iconCache'
 
 const props = withDefaults(defineProps<{
   item: NavItem
@@ -46,7 +46,9 @@ const displayIcon = computed(() => {
   return getFaviconUrl(props.item.url, props.item.title)
 })
 
-watch(displayIcon, () => {
+const refreshVersion = computed(() => getIconVersion(props.item.id))
+
+watch([displayIcon, refreshVersion], () => {
   iconError.value = false
 })
 
@@ -230,7 +232,7 @@ const handleMouseLeave = () => {
     <div class="w-10 h-10 flex items-center justify-center flex-shrink-0 transition-transform duration-200 ease-out group-hover:scale-110">
       <img
         v-if="displayIcon && !iconError"
-        :key="displayIcon"
+        :key="`${displayIcon}::${refreshVersion}`"
         :src="displayIcon"
         :alt="item.title"
         @load="handleIconLoad"
