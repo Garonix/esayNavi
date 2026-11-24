@@ -1,0 +1,64 @@
+export interface NavItem {
+  id: string
+  title: string
+  url: string
+  desc?: string
+  icon?: string
+  color?: string
+  pinned?: boolean
+  createdAt?: number
+  clickCount?: number
+}
+
+export interface NavCategory {
+  id: string
+  name: string
+  icon?: string
+  items: NavItem[]
+}
+
+export type BackgroundType = 'white' | 'image'
+
+export interface BackgroundConfig {
+  type: BackgroundType
+  url: string
+  localKey?: string
+  opacity: number // 蒙层透明度 0-100
+  blur: number // 蒙层模糊度 0-30
+  parallax: boolean // 视差滚动
+}
+
+export interface SearchEngineItemConfig {
+  id: string
+  name: string
+  url: string
+  icon?: string
+  enabled: boolean
+  isCustom?: boolean
+}
+
+export interface NavSettings {
+  title: string
+  background: BackgroundType
+  customBackground?: BackgroundConfig
+  searchEngine: string // 当前默认回车搜索引擎 ID
+  searchEngines?: SearchEngineItemConfig[] // 用户自定义与启用的搜索引擎列表
+  openInNewTab: boolean
+  showSearch: boolean
+  cardDensity?: 'compact' | 'normal' | 'relaxed' // 单行图标数量/密度调节
+  categorySpacing?: 'compact' | 'normal' | 'relaxed' // 分类显示间距调节
+}
+
+export interface BookmarkSuggestion {
+  id: string
+  title: string
+  url: string
+  categoryName?: string
+  icon?: string
+}
+
+export interface NavConfig {
+  version: string
+  settings: NavSettings
+  categories: NavCategory[]
+}

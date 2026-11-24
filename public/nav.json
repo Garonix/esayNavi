@@ -1,0 +1,77 @@
+{
+  "version": "1.2.2",
+  "settings": {
+    "title": "EasyNavi",
+    "theme": "light",
+    "background": "white",
+    "searchEngine": "google",
+    "openInNewTab": true,
+    "showClock": false,
+    "showSearch": true
+  },
+  "categories": [
+    {
+      "id": "daily",
+      "name": "常用应用",
+      "icon": "sparkles",
+      "items": [
+        {
+          "id": "item-daily-1",
+          "title": "GitHub",
+          "url": "https://github.com",
+          "icon": "https://github.githubassets.com/favicons/favicon.svg",
+          "pinned": true
+        },
+        {
+          "id": "item-daily-2",
+          "title": "哔哩哔哩",
+          "url": "https://www.bilibili.com",
+          "icon": "https://www.bilibili.com/favicon.ico",
+          "pinned": false
+        },
+        {
+          "id": "item-daily-3",
+          "title": "知乎",
+          "url": "https://www.zhihu.com",
+          "icon": "https://static.zhihu.com/heifetz/favicon.ico",
+          "pinned": false
+        },
+        {
+          "id": "item-daily-4",
+          "title": "DeepSeek",
+          "url": "https://chat.deepseek.com",
+          "icon": "https://chat.deepseek.com/favicon.svg",
+          "pinned": false
+        }
+      ]
+    },
+    {
+      "id": "dev",
+      "name": "开发文档",
+      "icon": "code-xml",
+      "items": [
+        {
+          "id": "item-dev-1",
+          "title": "MDN Web Docs",
+          "url": "https://developer.mozilla.org",
+          "icon": "https://developer.mozilla.org/favicon-48x48.png",
+          "pinned": false
+        },
+        {
+          "id": "item-dev-2",
+          "title": "Vue.js",
+          "url": "https://vuejs.org",
+          "icon": "https://vuejs.org/logo.svg",
+          "pinned": false
+        },
+        {
+          "id": "item-dev-3",
+          "title": "Tailwind CSS",
+          "url": "https://tailwindcss.com",
+          "icon": "https://tailwindcss.com/favicons/favicon.ico",
+          "pinned": false
+        }
+      ]
+    }
+  ]
+}

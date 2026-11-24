@@ -1,0 +1,159 @@
+/**
+ * 本地持久化图标缓存服务 (IndexedDB + 内存二级缓存)
+ * 作用：将站点的 Favicon / 图标以 DataURL/Base64 固化到浏览器本地数据库中，
+ * 避免每次刷新页面或重新打开浏览器时重复发送网络请求，实现图标毫秒级瞬开。
+ */
+
+const DB_NAME = 'easynavi_icon_cache_v3'
+const STORE_NAME = 'icons'
+const DB_VERSION = 1
+
+// 内存一级缓存 (当前会话极速直出)
+const memoryCache = new Map<string, string>()
+
+let dbPromise: Promise<IDBDatabase> | null = null
+
+function cleanLegacyDatabases() {
+  if (typeof window !== 'undefined' && window.indexedDB) {
+    try {
+      indexedDB.deleteDatabase('easynavi_icon_cache_v1')
+      indexedDB.deleteDatabase('easynavi_icon_cache_v2')
+    } catch {
+      // 忽略清理异常
+    }
+  }
+}
+cleanLegacyDatabases()
+
+function getDB(): Promise<IDBDatabase> {
+  if (dbPromise) return dbPromise
+  if (typeof window === 'undefined' || !window.indexedDB) {
+    return Promise.reject(new Error('IndexedDB not supported'))
+  }
+
+  dbPromise = new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION)
+
+    request.onupgradeneeded = () => {
+      const db = request.result
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME)
+      }
+    }
+
+    request.onsuccess = () => {
+      resolve(request.result)
+    }
+
+    request.onerror = () => {
+      reject(request.error)
+    }
+  })
+
+  return dbPromise
+}
+
+/**
+ * 预热并同步 IndexedDB 所有图标缓存至内存 Map
+ * 确保页面渲染第一帧即可 0ms 纯同步直出图标，彻底消除渲染闪烁与排队延迟
+ */
+export async function initIconCache(): Promise<void> {
+  try {
+    const db = await getDB()
+    await new Promise<void>((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly')
+      const store = tx.objectStore(STORE_NAME)
+      const cursorRequest = store.openCursor()
+
+      cursorRequest.onsuccess = () => {
+        const cursor = cursorRequest.result
+        if (cursor) {
+          if (typeof cursor.value === 'string' && cursor.value.trim().length > 0) {
+            memoryCache.set(String(cursor.key), cursor.value)
+          }
+          cursor.continue()
+        } else {
+          resolve()
+        }
+      }
+
+      cursorRequest.onerror = () => {
+        resolve()
+      }
+    })
+  } catch {
+    // 忽略异常
+  }
+}
+
+/**
+ * 纯同步极速获取内存图标缓存 (0ms 瞬开直出)
+ */
+export function getCachedIconSync(key: string): string | null {
+  if (!key) return null
+  return memoryCache.get(key) || null
+}
+
+/**
+ * 将图标 (DataURL 或已验证可用的直连地址) 存入本地缓存
+ */
+export async function saveCachedIcon(key: string, iconData: string): Promise<void> {
+  if (!key || !iconData || !iconData.trim()) return
+
+  // 写入内存
+  memoryCache.set(key, iconData)
+
+  // 异步写入 IndexedDB
+  try {
+    const db = await getDB()
+    const tx = db.transaction(STORE_NAME, 'readwrite')
+    const store = tx.objectStore(STORE_NAME)
+    store.put(iconData, key)
+  } catch {
+    // 忽略私密窗口或存储限额警告
+  }
+}
+
+/**
+ * 清除指定 key 的本地图标缓存
+ */
+export async function removeCachedIcon(key: string): Promise<void> {
+  if (!key) return
+  memoryCache.delete(key)
+  try {
+    const db = await getDB()
+    const tx = db.transaction(STORE_NAME, 'readwrite')
+    const store = tx.objectStore(STORE_NAME)
+    store.delete(key)
+  } catch {
+    // 忽略异常
+  }
+}
+
+/**
+ * 将已有 <img> 元素内容转换为 DataURL 并缓存（支持跨域导出的资源生效）
+ */
+export async function cacheIconFromImageElement(img: HTMLImageElement, cacheKey: string): Promise<string | null> {
+  if (!cacheKey || !img || !img.naturalWidth || !img.naturalHeight) return null
+  if (memoryCache.has(cacheKey)) return memoryCache.get(cacheKey)!
+
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.min(img.naturalWidth || 64, 128)
+    canvas.height = Math.min(img.naturalHeight || 64, 128)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    const dataUrl = canvas.toDataURL('image/png')
+    if (dataUrl && dataUrl.startsWith('data:image/png;base64,') && dataUrl.length > 60) {
+      await saveCachedIcon(cacheKey, dataUrl)
+      return dataUrl
+    }
+  } catch {
+    // 跨域受阻 (Tainted canvas) 属正常浏览器安全边界，依赖原生 Disk Cache 极速加载，绝不影响展示
+    return null
+  }
+
+  return null
+}
