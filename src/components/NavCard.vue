@@ -2,8 +2,8 @@
 import { ref, computed, watch } from 'vue'
 import { GripVertical } from 'lucide-vue-next'
 import type { NavItem } from '../types/nav'
-import { getFallbackAvatar, getFaviconUrl } from '../utils/urlHelper'
-import { getCachedIconSync, cacheIconFromImageElement, getIconVersion } from '../services/iconCache'
+import { getFallbackAvatar } from '../utils/urlHelper'
+import { getCachedIconSync, cacheIconFromImageElement, getIconVersion, resolveItemDisplayIcon } from '../services/iconCache'
 
 const props = withDefaults(defineProps<{
   item: NavItem
@@ -24,27 +24,8 @@ const emit = defineEmits<{
 const iconError = ref(false)
 const fallback = computed(() => getFallbackAvatar(props.item.title))
 
-// 解析静态图标链接 (以资源地址自身或站点 URL 为缓存键，避免编辑站点 URL 后仍命中旧 item.id 缓存)
-const displayIcon = computed(() => {
-  const explicitIcon = props.item.icon?.trim()
-  // 1. 若配置中本身就是内联 DataURL 或本地资产/SVG，直接 0ms 纯静态直出
-  if (explicitIcon && (explicitIcon.startsWith('data:') || explicitIcon.startsWith('/') || explicitIcon.endsWith('.svg'))) {
-    return explicitIcon
-  }
-
-  // 2. 显式外链图标优先检查针对该图标地址的缓存
-  if (explicitIcon) {
-    return getCachedIconSync(explicitIcon) || explicitIcon
-  }
-
-  // 3. 无显式图标时，检查按站点 URL 缓存的图标，再回退到默认推断图标
-  const cachedByUrl = props.item.url ? getCachedIconSync(props.item.url) : null
-  if (cachedByUrl) {
-    return cachedByUrl
-  }
-
-  return getFaviconUrl(props.item.url, props.item.title)
-})
+// 解析静态图标链接 (统一走共享图标解析管线，支持 local-icon 引用与内存缓存 0ms 直出)
+const displayIcon = computed(() => resolveItemDisplayIcon(props.item))
 
 const refreshVersion = computed(() => getIconVersion(props.item.id))
 

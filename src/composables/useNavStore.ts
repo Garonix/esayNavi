@@ -4,6 +4,7 @@ import {
   createDefaultConfig,
   loadInitialConfig,
   saveConfigToLocal,
+  saveClicksToLocal,
   exportConfigFile,
   importConfigFile,
   clearLocalConfig,
@@ -13,10 +14,21 @@ import {
   initIconCache,
   saveCachedIcon,
   removeCachedIcon,
-  bumpIconVersion
+  bumpIconVersion,
+  buildIconAssetKey,
+  isLocalIconRef,
+  extractLocalIconKey
 } from '../services/iconCache'
 import { resolveSiteFavicon } from '../services/faviconFetcher'
 import { extractSiteTitle, getFaviconUrl, normalizeUrl } from '../utils/urlHelper'
+
+function getIconAssetCacheKey(icon?: string): string | null {
+  const trimmed = icon?.trim()
+  if (!trimmed) return null
+  if (trimmed.startsWith('data:')) return buildIconAssetKey(trimmed)
+  if (isLocalIconRef(trimmed)) return extractLocalIconKey(trimmed)
+  return null
+}
 
 /**
  * 对比前后配置，提取在新配置中已失效的图标缓存键（用于表格全量保存/导入时的缓存回收）
@@ -32,6 +44,10 @@ export function collectStaleIconCacheKeys(prevConfig: NavConfig, nextConfig: Nav
       const explicitIcon = item.icon?.trim()
       if (explicitIcon && !explicitIcon.startsWith('data:')) {
         activeKeys.add(explicitIcon)
+      }
+      const assetKey = getIconAssetCacheKey(explicitIcon)
+      if (assetKey) {
+        activeKeys.add(assetKey)
       }
     }
   }
@@ -53,6 +69,10 @@ export function collectStaleIconCacheKeys(prevConfig: NavConfig, nextConfig: Nav
         const prevIcon = prevItem.icon?.trim()
         if (prevIcon && !prevIcon.startsWith('data:') && !activeKeys.has(prevIcon)) {
           staleKeys.add(prevIcon)
+        }
+        const prevAssetKey = getIconAssetCacheKey(prevIcon)
+        if (prevAssetKey && !activeKeys.has(prevAssetKey)) {
+          staleKeys.add(prevAssetKey)
         }
       }
     }
@@ -79,7 +99,21 @@ export function useNavStore() {
   }
 
   const persist = () => {
-    saveConfigToLocal(config.value)
+    const res = saveConfigToLocal(config.value)
+    if (!res.ok) {
+      showToast('本地存储空间不足，请导出备份')
+    }
+  }
+
+  const isKeyUsedByOtherItem = (key: string, excludeItemId?: string): boolean => {
+    for (const cat of config.value.categories) {
+      for (const item of cat.items) {
+        if (excludeItemId && item.id === excludeItemId) continue
+        if (item.url === key || item.icon?.trim() === key) return true
+        if (getIconAssetCacheKey(item.icon) === key) return true
+      }
+    }
+    return false
   }
 
   const findItemInStore = (itemId: string): NavItem | null => {
@@ -169,7 +203,10 @@ export function useNavStore() {
 
   const recordItemClick = (item: NavItem) => {
     item.clickCount = (item.clickCount || 0) + 1
-    persist()
+    const res = saveClicksToLocal(config.value.categories)
+    if (!res.ok) {
+      showToast('本地存储空间不足，请导出备份')
+    }
   }
 
   const saveItem = async (payload: { item: NavItem; categoryId: string }) => {
@@ -188,8 +225,16 @@ export function useNavStore() {
     if (previousItem) {
       if (previousItem.url !== item.url || previousItem.icon !== item.icon) {
         await removeCachedIcon(previousItem.id)
-        if (previousItem.icon) await removeCachedIcon(previousItem.icon)
-        if (previousItem.url) await removeCachedIcon(previousItem.url)
+        if (previousItem.icon && !isKeyUsedByOtherItem(previousItem.icon, item.id)) {
+          await removeCachedIcon(previousItem.icon)
+        }
+        if (previousItem.url && !isKeyUsedByOtherItem(previousItem.url, item.id)) {
+          await removeCachedIcon(previousItem.url)
+        }
+        const prevAssetKey = getIconAssetCacheKey(previousItem.icon)
+        if (prevAssetKey && prevAssetKey !== getIconAssetCacheKey(item.icon) && !isKeyUsedByOtherItem(prevAssetKey, item.id)) {
+          await removeCachedIcon(prevAssetKey)
+        }
         bumpIconVersion(item.id)
       }
     }
@@ -198,28 +243,43 @@ export function useNavStore() {
     if (!targetCat) {
       targetCat = config.value.categories[0]
     }
-
-    if (targetCat) {
-      if (item.pinned) {
-        targetCat.items.unshift(item)
-      } else {
-        targetCat.items.push(item)
+    if (!targetCat) {
+      targetCat = {
+        id: 'cat-' + Date.now().toString(36),
+        name: '常用应用',
+        icon: 'sparkles',
+        items: []
       }
-      persist()
-      showToast('已保存')
+      config.value.categories.push(targetCat)
+    }
 
-      // 全新站点且非用户手动上传的 DataURL 图标：后台静默异步探测真实图标并固化
-      if (!previousItem && !item.icon?.startsWith('data:')) {
-        void resolveAndUpgradeNewItemIcon(item.id, item.url, item.title)
-      }
+    if (item.pinned) {
+      targetCat.items.unshift(item)
+    } else {
+      targetCat.items.push(item)
+    }
+    persist()
+    showToast('已保存')
+
+    // 全新站点且非用户手动上传的 DataURL / local-icon 图标：后台静默异步探测真实图标并固化
+    if (!previousItem && !item.icon?.startsWith('data:') && !isLocalIconRef(item.icon)) {
+      void resolveAndUpgradeNewItemIcon(item.id, item.url, item.title)
     }
   }
 
   const deleteItem = async (item: NavItem, categoryId?: string | null) => {
     const cleanCaches = async () => {
       await removeCachedIcon(item.id)
-      if (item.icon) await removeCachedIcon(item.icon)
-      if (item.url) await removeCachedIcon(item.url)
+      if (item.icon && !isKeyUsedByOtherItem(item.icon, item.id)) {
+        await removeCachedIcon(item.icon)
+      }
+      if (item.url && !isKeyUsedByOtherItem(item.url, item.id)) {
+        await removeCachedIcon(item.url)
+      }
+      const assetKey = getIconAssetCacheKey(item.icon)
+      if (assetKey && !isKeyUsedByOtherItem(assetKey, item.id)) {
+        await removeCachedIcon(assetKey)
+      }
     }
 
     if (categoryId) {
@@ -255,6 +315,10 @@ export function useNavStore() {
       await removeCachedIcon(item.id)
       if (originalIcon) await removeCachedIcon(originalIcon)
       if (item.url) await removeCachedIcon(item.url)
+      const prevAssetKey = getIconAssetCacheKey(originalIcon)
+      if (prevAssetKey && !isKeyUsedByOtherItem(prevAssetKey, item.id)) {
+        await removeCachedIcon(prevAssetKey)
+      }
 
       const newIcon = await resolveSiteFavicon(item.url, item.title)
       if (newIcon) {

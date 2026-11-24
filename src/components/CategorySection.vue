@@ -17,6 +17,7 @@ import {
   dragHoverTarget,
   activeReorderCategoryId
 } from '../services/dragState'
+import { resolveItemDisplayIcon } from '../services/iconCache'
 import { useGridReorder } from '../composables/useGridReorder'
 
 export interface DisplayCard {
@@ -71,6 +72,7 @@ const isMouseInside = ref(false)
 let revealTimer: number | null = null
 let collapseTimer: number | null = null
 
+const sectionRef = ref<HTMLElement | null>(null)
 const reelGridRef = ref<any>(null)
 const SINGLE_ROW_HEIGHT = 98
 const currentHeight = ref<string>(`${SINGLE_ROW_HEIGHT}px`)
@@ -177,7 +179,7 @@ const shouldExpandInReorderMode = computed(() => {
 
 // 物理高度连续插值
 const updateReelHeight = () => {
-  if (isCollapsed.value && !props.isReorderMode) {
+  if (isCollapsed.value && !props.isReorderMode && !hasFocusedCard.value) {
     currentHeight.value = '0px'
     return
   }
@@ -193,7 +195,7 @@ const updateReelHeight = () => {
     }
     return
   }
-  if (!isHovered.value) {
+  if (!isHovered.value && !hasFocusedCardInOverflow.value && !(isCollapsed.value && hasFocusedCard.value)) {
     currentHeight.value = `${SINGLE_ROW_HEIGHT}px`
   } else {
     if (el) {
@@ -343,7 +345,9 @@ const getCardWaveStyle = (index: number): CSSProperties => {
   // 向右传导延时：每列相隔 18ms，次排累加 40ms
   const waveDelay = (colIndex * 18) + (rowIndex > 1 ? (rowIndex - 1) * 40 : 0)
 
-  if (!isRevealed.value) {
+  const effectivelyRevealed = isRevealed.value || hasFocusedCardInOverflow.value || (isCollapsed.value && hasFocusedCard.value)
+
+  if (!effectivelyRevealed) {
     return {
       opacity: 0,
       transform: 'translateY(6px) scale(0.98)',
@@ -435,6 +439,30 @@ const displayCards = computed<DisplayCard[]>(() => {
   }))
 })
 
+// 键盘漫游聚焦卡片感知：若焦点落在折叠的第 2 排及以后，自动展开并滚动入视口
+const focusedCardIndex = computed(() => {
+  if (!props.focusedCardId) return -1
+  return displayCards.value.findIndex(c => !c.isGhost && c.item.id === props.focusedCardId)
+})
+
+const hasFocusedCard = computed(() => focusedCardIndex.value !== -1)
+const hasFocusedCardInOverflow = computed(() => focusedCardIndex.value >= columnsCount.value)
+
+const scrollFocusedCardIntoView = () => {
+  if (!props.focusedCardId || !sectionRef.value) return
+  const targetEl = sectionRef.value.querySelector(`[data-reorder-card="${props.focusedCardId}"]`) as HTMLElement | null
+  targetEl?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
+}
+
+watch([() => props.focusedCardId, columnsCount], () => {
+  nextTick(() => {
+    updateReelHeight()
+    if (hasFocusedCard.value) {
+      scrollFocusedCardIntoView()
+    }
+  })
+})
+
 // Pointer 拖拽物理动力学与滞回状态（由独立 composable 托管并自动随生命周期卸载监听器）
 const { handleCardPointerDown, handleCardStartReorder } = useGridReorder({
   categoryId: () => props.category.id,
@@ -515,6 +543,7 @@ const getCategoryIcon = (iconName?: string) => {
 
 <template>
   <section 
+    ref="sectionRef"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
     class="category-section w-full rounded-2xl p-2.5 transition-all duration-200"
@@ -603,8 +632,8 @@ const getCategoryIcon = (iconName?: string) => {
             <!-- 柔和微缩卡片虚影 -->
             <div class="w-10 h-10 flex items-center justify-center opacity-40 grayscale scale-95">
               <img
-                v-if="card.item.icon"
-                :src="card.item.icon"
+                v-if="resolveItemDisplayIcon(card.item)"
+                :src="resolveItemDisplayIcon(card.item)"
                 class="w-9 h-9 object-contain"
               />
               <div

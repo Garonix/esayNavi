@@ -1,7 +1,16 @@
-import type { NavConfig } from '../types/nav'
+import type { NavCategory, NavConfig } from '../types/nav'
 import { DEFAULT_SEARCH_ENGINES } from '../utils/searchEngines'
+import {
+  LOCAL_ICON_PREFIX,
+  buildIconAssetKey,
+  extractLocalIconKey,
+  getCachedIconSync,
+  isLocalIconRef,
+  saveCachedIcon
+} from './iconCache'
 
 export const LOCAL_STORAGE_KEY = 'easynavi_config_v6'
+export const CLICKS_STORAGE_KEY = 'easynavi_clicks_v1'
 const LEGACY_STORAGE_KEYS = [
   'easynavi_config_v1',
   'easynavi_config_v2',
@@ -9,6 +18,11 @@ const LEGACY_STORAGE_KEYS = [
   'easynavi_config_v4',
   'easynavi_config_v5'
 ]
+
+export interface StorageSaveResult {
+  ok: boolean
+  error?: unknown
+}
 
 export function createDefaultConfig(): NavConfig {
   return {
@@ -115,19 +129,129 @@ export function normalizeConfig(raw: any): { config: NavConfig; modified: boolea
 }
 
 /**
- * 清理当前及历史版本的本地缓存配置
+ * 清理当前及历史版本的本地缓存配置与点击统计
  */
 export function clearLocalConfig(): void {
   if (typeof localStorage === 'undefined') return
   localStorage.removeItem(LOCAL_STORAGE_KEY)
+  localStorage.removeItem(CLICKS_STORAGE_KEY)
   for (const legacyKey of LEGACY_STORAGE_KEYS) {
     localStorage.removeItem(legacyKey)
   }
 }
 
 /**
+ * 读取独立的轻量点击频次表
+ */
+export function loadClicksFromLocal(): Record<string, number> {
+  if (typeof localStorage === 'undefined') return {}
+  try {
+    const raw = localStorage.getItem(CLICKS_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const result: Record<string, number> = {}
+    for (const [id, count] of Object.entries(parsed)) {
+      if (typeof count === 'number' && Number.isFinite(count) && count > 0) {
+        result[id] = Math.floor(count)
+      }
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * 单独持久化点击频次（高频点击不再触发整份 NavConfig 全量序列化）
+ */
+export function saveClicksToLocal(categories: NavCategory[]): StorageSaveResult {
+  if (typeof localStorage === 'undefined') return { ok: true }
+  try {
+    const clicksMap: Record<string, number> = {}
+    for (const cat of categories || []) {
+      for (const item of cat.items || []) {
+        if (item.id && item.clickCount && item.clickCount > 0) {
+          clicksMap[item.id] = item.clickCount
+        }
+      }
+    }
+    localStorage.setItem(CLICKS_STORAGE_KEY, JSON.stringify(clicksMap))
+    return { ok: true }
+  } catch (error) {
+    console.error('保存点击统计失败:', error)
+    return { ok: false, error }
+  }
+}
+
+/**
+ * 将配置中的 DataURL 图标资产剥离至 IndexedDB/内存缓存，仅在 localStorage 保留轻量引用并分离点击数
+ */
+export function dehydrateConfigForStorage(config: NavConfig): NavConfig {
+  return {
+    ...config,
+    settings: { ...config.settings },
+    categories: (config.categories || []).map(cat => ({
+      ...cat,
+      items: (cat.items || []).map(item => {
+        const { clickCount: _omitClickCount, ...rest } = item
+        const icon = rest.icon?.trim()
+        if (icon && icon.startsWith('data:')) {
+          const assetKey = buildIconAssetKey(icon)
+          void saveCachedIcon(assetKey, icon)
+          return {
+            ...rest,
+            icon: `${LOCAL_ICON_PREFIX}${assetKey}`
+          }
+        }
+        return { ...rest }
+      })
+    }))
+  }
+}
+
+/**
+ * 从缓存与点击统计中水合配置（还原 local-icon 引用为可用 DataURL，并合并 clickCount）
+ */
+export function hydrateConfigFromStorage(
+  config: NavConfig,
+  clicksMap: Record<string, number> = loadClicksFromLocal()
+): NavConfig {
+  return {
+    ...config,
+    settings: { ...config.settings },
+    categories: (config.categories || []).map(cat => ({
+      ...cat,
+      items: (cat.items || []).map(item => {
+        let resolvedIcon = item.icon
+        if (isLocalIconRef(resolvedIcon)) {
+          const cached = getCachedIconSync(extractLocalIconKey(resolvedIcon!))
+          if (cached) {
+            resolvedIcon = cached
+          }
+        }
+        const mergedClicks = Math.max(item.clickCount || 0, clicksMap[item.id] || 0)
+        return {
+          ...item,
+          icon: resolvedIcon,
+          clickCount: mergedClicks
+        }
+      })
+    }))
+  }
+}
+
+function hasInlineDataIcons(raw: any): boolean {
+  if (!raw || !Array.isArray(raw.categories)) return false
+  return raw.categories.some((cat: any) =>
+    Array.isArray(cat?.items) &&
+    cat.items.some((item: any) => typeof item?.icon === 'string' && item.icon.trim().startsWith('data:'))
+  )
+}
+
+/**
  * 初始载入配置：
- * 1. 优先读取 LocalStorage
+ * 1. 优先读取 LocalStorage（并水合分层存储的图标与点击数）
  * 2. 若无则从 public/nav.json 加载
  */
 export async function loadInitialConfig(): Promise<NavConfig> {
@@ -139,11 +263,13 @@ export async function loadInitialConfig(): Promise<NavConfig> {
     if (cached) {
       const parsed = JSON.parse(cached)
       if (parsed && Array.isArray(parsed.categories) && parsed.categories.length > 0) {
+        const hadInlineIcons = hasInlineDataIcons(parsed)
         const { config, modified } = normalizeConfig(parsed)
-        if (modified) {
-          saveConfigToLocal(config)
+        const hydrated = hydrateConfigFromStorage(config, loadClicksFromLocal())
+        if (modified || hadInlineIcons) {
+          saveConfigToLocal(hydrated)
         }
-        return config
+        return hydrated
       }
     }
   } catch (e) {
@@ -157,8 +283,9 @@ export async function loadInitialConfig(): Promise<NavConfig> {
     if (res.ok) {
       const remoteConfig = await res.json()
       const { config } = normalizeConfig(remoteConfig)
-      saveConfigToLocal(config)
-      return config
+      const hydrated = hydrateConfigFromStorage(config, loadClicksFromLocal())
+      saveConfigToLocal(hydrated)
+      return hydrated
     }
   } catch (e) {
     console.error('加载 public/nav.json 失败:', e)
@@ -168,21 +295,27 @@ export async function loadInitialConfig(): Promise<NavConfig> {
 }
 
 /**
- * 将配置持久化保存到 LocalStorage
+ * 将配置脱水后持久化保存到 LocalStorage（同时同步轻量点击表）
  */
-export function saveConfigToLocal(config: NavConfig): void {
+export function saveConfigToLocal(config: NavConfig): StorageSaveResult {
+  if (typeof localStorage === 'undefined') return { ok: true }
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(config, null, 2))
-  } catch (e) {
-    console.error('保存到 LocalStorage 失败:', e)
+    const dehydrated = dehydrateConfigForStorage(config)
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dehydrated))
+    saveClicksToLocal(config.categories)
+    return { ok: true }
+  } catch (error) {
+    console.error('保存到 LocalStorage 失败:', error)
+    return { ok: false, error }
   }
 }
 
 /**
- * 纯前端导出 JSON 物理文件并触发下载
+ * 纯前端导出完整可移植 JSON 物理文件并触发下载
  */
 export function exportConfigFile(config: NavConfig, filename = 'nav.json'): void {
-  const jsonStr = JSON.stringify(config, null, 2)
+  const portable = hydrateConfigFromStorage(config, {})
+  const jsonStr = JSON.stringify(portable, null, 2)
   const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

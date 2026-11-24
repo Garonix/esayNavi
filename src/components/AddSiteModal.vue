@@ -180,7 +180,7 @@ const handleSubmit = () => {
 
   emit('save', {
     item: newItem,
-    categoryId: selectedCategoryId.value || props.categories[0]?.id || 'flare'
+    categoryId: selectedCategoryId.value || props.categories[0]?.id || ''
   })
   emit('close')
 }

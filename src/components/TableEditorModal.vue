@@ -12,10 +12,15 @@ import {
   ChevronDown,
   Check
 } from 'lucide-vue-next'
-import type { NavConfig, NavCategory, NavItem } from '../types/nav'
+import type { NavConfig } from '../types/nav'
 import { normalizeToCompactIcon } from '../utils/imageHelper'
-import { normalizeUrl, extractSiteTitle, getFallbackAvatar } from '../utils/urlHelper'
-import { ensureUniqueItemIds } from '../services/storage'
+import { extractSiteTitle, getFallbackAvatar } from '../utils/urlHelper'
+import { resolveItemDisplayIcon } from '../services/iconCache'
+import {
+  type TableRow,
+  categoriesToTableRows,
+  buildNavConfigFromTableRows
+} from '../utils/tableEditorHelper'
 
 const props = defineProps<{
   show: boolean
@@ -26,15 +31,6 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'save', newConfig: NavConfig): void
 }>()
-
-interface TableRow {
-  id: string
-  title: string
-  url: string
-  categoryName: string
-  icon: string
-  pinned: boolean
-}
 
 const rows = ref<TableRow[]>([])
 const searchFilter = ref('')
@@ -196,31 +192,10 @@ watch(
       searchFilter.value = ''
       activeDropdownRowId.value = null
       newCategoryInput.value = ''
-      const list: TableRow[] = []
-      const catMap = new Map<string, { id: string; icon?: string }>()
-      const catNames: string[] = []
-
-      for (const cat of props.config.categories) {
-        catMap.set(cat.name.trim(), { id: cat.id, icon: cat.icon })
-        catNames.push(cat.name.trim())
-
-        if (Array.isArray(cat.items)) {
-          for (const item of cat.items) {
-            list.push({
-              id: item.id || `item-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-              title: item.title || '',
-              url: item.url || '',
-              categoryName: cat.name.trim(),
-              icon: item.icon || '',
-              pinned: !!item.pinned
-            })
-          }
-        }
-      }
-
-      rows.value = list
-      existingCategoryMap.value = catMap
-      existingCategoryNames.value = catNames
+      const { rows: mappedRows, categoryMap, categoryNames } = categoriesToTableRows(props.config.categories)
+      rows.value = mappedRows
+      existingCategoryMap.value = categoryMap
+      existingCategoryNames.value = categoryNames
       selectedRowIds.value.clear()
       batchCategoryDropdownOpen.value = false
       categoryPendingDelete.value = null
@@ -361,60 +336,17 @@ const handleUrlBlur = (row: TableRow) => {
   }
 }
 
-// 保存并转化回 NavConfig 结构
+// 保存并转化回 NavConfig 结构（保留原有 clickCount / desc / createdAt / color 等字段）
 const handleSave = () => {
   if (hasIncompleteRows.value) return
 
-  const validRows = rows.value.filter(r => r.url.trim() && r.title.trim())
+  const updatedConfig = buildNavConfigFromTableRows(
+    props.config,
+    rows.value,
+    existingCategoryNames.value,
+    existingCategoryMap.value
+  )
 
-  const categoryOrder: string[] = []
-  const groupedItems = new Map<string, TableRow[]>()
-
-  for (const catName of existingCategoryNames.value) {
-    categoryOrder.push(catName)
-    groupedItems.set(catName, [])
-  }
-
-  for (const row of validRows) {
-    const catName = row.categoryName.trim() || '未分类'
-    if (!groupedItems.has(catName)) {
-      categoryOrder.push(catName)
-      groupedItems.set(catName, [])
-    }
-    groupedItems.get(catName)!.push(row)
-  }
-
-  const newCategories: NavCategory[] = []
-  for (const catName of categoryOrder) {
-    const itemsInCat = groupedItems.get(catName) || []
-    if (itemsInCat.length > 0 || existingCategoryMap.value.has(catName)) {
-      const existingMeta = existingCategoryMap.value.get(catName)
-      const catId = existingMeta?.id || `cat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-      const catIcon = existingMeta?.icon || 'folder'
-
-      const mappedItems: NavItem[] = itemsInCat.map(r => ({
-        id: r.id,
-        title: r.title.trim() || extractSiteTitle(r.url),
-        url: normalizeUrl(r.url),
-        icon: r.icon.trim(),
-        pinned: r.pinned
-      }))
-
-      newCategories.push({
-        id: catId,
-        name: catName,
-        icon: catIcon,
-        items: mappedItems
-      })
-    }
-  }
-
-  const updatedConfig: NavConfig = {
-    ...props.config,
-    categories: newCategories
-  }
-
-  ensureUniqueItemIds(updatedConfig)
   emit('save', updatedConfig)
   emit('close')
 }
@@ -733,8 +665,8 @@ const handleSave = () => {
                     <div class="flex items-center gap-1.5">
                       <div class="w-6 h-6 rounded-md bg-slate-100 border border-slate-200/70 flex items-center justify-center flex-shrink-0 overflow-hidden">
                         <img 
-                          v-if="row.icon" 
-                          :src="row.icon" 
+                          v-if="resolveItemDisplayIcon(row)" 
+                          :src="resolveItemDisplayIcon(row)" 
                           @error="($event.target as HTMLElement).style.display = 'none'"
                           class="w-5 h-5 object-contain" 
                         />

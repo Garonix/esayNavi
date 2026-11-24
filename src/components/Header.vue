@@ -25,6 +25,7 @@ const emit = defineEmits<{
   (e: 'update:searchQuery', val: string): void
   (e: 'submitSearch', query: string, engine: string): void
   (e: 'openDirectUrl', url: string): void
+  (e: 'selectSuggestion', item: BookmarkSuggestion): void
   (e: 'navigateCards', direction: 'next' | 'prev'): void
   (e: 'selectFocusedCard'): void
   (e: 'clearFocus'): void
@@ -135,7 +136,7 @@ const handleSelectSuggestion = (item: BookmarkSuggestion) => {
   isFocused.value = false
   selectedSuggestionIndex.value = -1
   if (item.url) {
-    emit('openDirectUrl', item.url)
+    emit('selectSuggestion', item)
   }
 }
 

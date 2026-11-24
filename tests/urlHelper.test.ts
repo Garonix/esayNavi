@@ -25,6 +25,10 @@ describe('urlHelper', () => {
     expect(toDirectUrl('192.168.1.1')).toBe('http://192.168.1.1')
     expect(toDirectUrl('github.com')).toBe('https://github.com')
     expect(normalizeUrl('example.com')).toBe('https://example.com')
+    expect(normalizeUrl('192.168.1.1:8080')).toBe('http://192.168.1.1:8080')
+    expect(normalizeUrl('localhost:5188')).toBe('http://localhost:5188')
+    expect(normalizeUrl('nas.local:9000')).toBe('http://nas.local:9000')
+    expect(normalizeUrl('router.lan')).toBe('http://router.lan')
   })
 
   it('protects private network hosts from external favicon lookups', () => {

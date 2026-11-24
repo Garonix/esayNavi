@@ -5,6 +5,55 @@
  */
 
 import { ref } from 'vue'
+import { getFaviconUrl } from '../utils/urlHelper'
+
+export const LOCAL_ICON_PREFIX = 'local-icon:'
+
+export function isLocalIconRef(icon?: string | null): boolean {
+  return !!icon && icon.startsWith(LOCAL_ICON_PREFIX)
+}
+
+export function extractLocalIconKey(iconRef: string): string {
+  return iconRef.slice(LOCAL_ICON_PREFIX.length)
+}
+
+/**
+ * 为 DataURL 图标生成确定性内容指纹键（同图标自动去重，变更图标自动产生新键）
+ */
+export function buildIconAssetKey(dataUrl: string): string {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < dataUrl.length; i++) {
+    hash ^= dataUrl.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return `asset-${(hash >>> 0).toString(36)}-${dataUrl.length.toString(36)}`
+}
+
+/**
+ * 统一解析卡片/联想/浮动虚影的展示图标地址（0ms 同步优先命中内存缓存，兼容 local-icon 引用与兜底推断）
+ */
+export function resolveItemDisplayIcon(item: { icon?: string; url?: string; title?: string }): string {
+  const explicitIcon = item.icon?.trim()
+  if (explicitIcon) {
+    if (isLocalIconRef(explicitIcon)) {
+      const cachedAsset = getCachedIconSync(extractLocalIconKey(explicitIcon))
+      if (cachedAsset) return cachedAsset
+    } else if (
+      explicitIcon.startsWith('data:') ||
+      explicitIcon.startsWith('/') ||
+      explicitIcon.endsWith('.svg')
+    ) {
+      return explicitIcon
+    } else {
+      return getCachedIconSync(explicitIcon) || explicitIcon
+    }
+  }
+
+  const cachedByUrl = item.url ? getCachedIconSync(item.url) : null
+  if (cachedByUrl) return cachedByUrl
+
+  return item.url ? getFaviconUrl(item.url, item.title) : ''
+}
 
 const DB_NAME = 'easynavi_icon_cache_v3'
 const STORE_NAME = 'icons'

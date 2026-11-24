@@ -7,6 +7,7 @@ import {
 import type { BookmarkSuggestion } from '../types/nav'
 import { getCleanUrlInfo } from '../utils/pinyinHelper'
 import { getFallbackAvatar } from '../utils/urlHelper'
+import { resolveItemDisplayIcon } from '../services/iconCache'
 
 defineProps<{
   show: boolean
@@ -22,8 +23,10 @@ defineEmits<{
 
 const failedIcons = ref(new Set<string>())
 
-const handleIconError = (id: string) => {
-  failedIcons.value.add(id)
+const getIconSrc = (item: BookmarkSuggestion) => resolveItemDisplayIcon(item)
+
+const handleIconError = (item: BookmarkSuggestion, src: string) => {
+  failedIcons.value.add(`${item.id}::${src}`)
 }
 </script>
 
@@ -60,10 +63,10 @@ const handleIconError = (id: string) => {
               :class="selectedIndex === idx ? 'bg-blue-100/70 text-blue-600' : 'bg-slate-100 text-slate-400 group-hover:text-slate-600'"
             >
               <img 
-                v-if="item.icon && !failedIcons.has(item.id)" 
-                :src="item.icon" 
+                v-if="getIconSrc(item) && !failedIcons.has(`${item.id}::${getIconSrc(item)}`)" 
+                :src="getIconSrc(item)" 
                 class="w-3.5 h-3.5 object-contain"
-                @error="handleIconError(item.id)"
+                @error="handleIconError(item, getIconSrc(item))"
               />
               <div 
                 v-else-if="item.title"

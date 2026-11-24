@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useNavStore, collectStaleIconCacheKeys } from '../src/composables/useNavStore'
-import { LOCAL_STORAGE_KEY } from '../src/services/storage'
-import { saveCachedIcon, getCachedIconSync, getIconVersion } from '../src/services/iconCache'
+import { LOCAL_STORAGE_KEY, CLICKS_STORAGE_KEY } from '../src/services/storage'
+import {
+  saveCachedIcon,
+  getCachedIconSync,
+  getIconVersion,
+  buildIconAssetKey,
+  resolveItemDisplayIcon
+} from '../src/services/iconCache'
 import * as faviconFetcher from '../src/services/faviconFetcher'
 import type { NavConfig } from '../src/types/nav'
 
@@ -161,6 +167,70 @@ describe('useNavStore', () => {
     resolveSpy.mockResolvedValueOnce('data:image/svg+xml;charset=utf-8,%3Csvg%2F%3E')
     await store.refreshItemIcon(store.config.value.categories[0].items[0])
     expect(getIconVersion('new-auto')).toBe(beforeVer + 1)
+
+    store.dispose()
+  })
+
+  it('auto-creates default category when saving into empty store, persists clicks separately, and cleans stale asset keys', async () => {
+    const store = useNavStore()
+    store.config.value.categories = []
+
+    const sharedDataIcon = 'data:image/png;base64,SHARED_ICON_DATA'
+    const uniqueDataIcon = 'data:image/png;base64,UNIQUE_ICON_DATA'
+
+    // 空分类兜底创建
+    await store.saveItem({
+      categoryId: '',
+      item: { id: 'first-1', title: 'First', url: 'https://first.dev', icon: uniqueDataIcon }
+    })
+    expect(store.config.value.categories).toHaveLength(1)
+    expect(store.config.value.categories[0].items[0].id).toBe('first-1')
+
+    // recordItemClick 只写入轻量 clicks key，不重写主配置 key
+    const beforeMainRaw = localStorage.getItem(LOCAL_STORAGE_KEY)
+    store.recordItemClick(store.config.value.categories[0].items[0])
+    expect(store.config.value.categories[0].items[0].clickCount).toBe(1)
+    expect(localStorage.getItem(LOCAL_STORAGE_KEY)).toBe(beforeMainRaw)
+    expect(JSON.parse(localStorage.getItem(CLICKS_STORAGE_KEY) || '{}')['first-1']).toBe(1)
+
+    // 共享资产清理保护
+    const stale = collectStaleIconCacheKeys(
+      {
+        ...store.config.value,
+        categories: [
+          {
+            id: 'c1',
+            name: 'One',
+            items: [
+              { id: 'a', title: 'A', url: 'https://a.com', icon: sharedDataIcon },
+              { id: 'b', title: 'B', url: 'https://b.com', icon: sharedDataIcon },
+              { id: 'c', title: 'C', url: 'https://c.com', icon: uniqueDataIcon }
+            ]
+          }
+        ]
+      },
+      {
+        ...store.config.value,
+        categories: [
+          {
+            id: 'c1',
+            name: 'One',
+            items: [{ id: 'a', title: 'A', url: 'https://a.com', icon: sharedDataIcon }]
+          }
+        ]
+      }
+    )
+
+    expect(stale).toContain(buildIconAssetKey(uniqueDataIcon))
+    expect(stale).not.toContain(buildIconAssetKey(sharedDataIcon))
+
+    // resolveItemDisplayIcon 支持 local-icon 引用及缺失回退
+    const assetKey = buildIconAssetKey(sharedDataIcon)
+    await saveCachedIcon(assetKey, sharedDataIcon)
+    expect(resolveItemDisplayIcon({ icon: `local-icon:${assetKey}`, url: 'https://a.com', title: 'A' })).toBe(sharedDataIcon)
+    expect(resolveItemDisplayIcon({ icon: 'local-icon:asset-missing', url: 'http://192.168.1.10:8080', title: 'NAS' })).toBe(
+      'http://192.168.1.10:8080/favicon.ico'
+    )
 
     store.dispose()
   })

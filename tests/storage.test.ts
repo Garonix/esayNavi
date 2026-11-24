@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import {
+  CLICKS_STORAGE_KEY,
   LOCAL_STORAGE_KEY,
   clearLocalConfig,
   ensureUniqueItemIds,
@@ -7,6 +8,7 @@ import {
   normalizeConfig,
   saveConfigToLocal
 } from '../src/services/storage'
+import { LOCAL_ICON_PREFIX, buildIconAssetKey, getCachedIconSync } from '../src/services/iconCache'
 import type { NavConfig } from '../src/types/nav'
 
 describe('storage service', () => {
@@ -112,5 +114,53 @@ describe('storage service', () => {
     const loadedFromRemote = await loadInitialConfig()
     expect(loadedFromRemote.settings.title).toBe('Remote')
     expect(loadedFromRemote.categories[0].items[0].title).toBe('GitHub')
+  })
+
+  it('dehydrates DataURL icons and separates click counts from main localStorage payload', async () => {
+    const bigDataIcon = 'data:image/png;base64,' + 'A'.repeat(256)
+    const cfg: NavConfig = {
+      version: '1.2.2',
+      settings: { title: 'EasyNavi', background: 'white', searchEngine: 'google', openInNewTab: true, showSearch: true },
+      categories: [
+        {
+          id: 'c1',
+          name: '常用',
+          items: [{ id: 'i1', title: 'Custom', url: 'https://custom.dev', icon: bigDataIcon, clickCount: 7 }]
+        }
+      ]
+    }
+
+    const res = saveConfigToLocal(cfg)
+    expect(res.ok).toBe(true)
+
+    const rawStored = localStorage.getItem(LOCAL_STORAGE_KEY) || ''
+    expect(rawStored).not.toContain('data:image/png')
+    expect(rawStored).toContain(LOCAL_ICON_PREFIX)
+    expect(rawStored).not.toContain('"clickCount"')
+
+    const clicksStored = JSON.parse(localStorage.getItem(CLICKS_STORAGE_KEY) || '{}')
+    expect(clicksStored['i1']).toBe(7)
+
+    const assetKey = buildIconAssetKey(bigDataIcon)
+    expect(getCachedIconSync(assetKey)).toBe(bigDataIcon)
+
+    const reloaded = await loadInitialConfig()
+    expect(reloaded.categories[0].items[0].icon).toBe(bigDataIcon)
+    expect(reloaded.categories[0].items[0].clickCount).toBe(7)
+  })
+
+  it('returns failure result instead of crashing when localStorage quota is exceeded', () => {
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('QuotaExceededError')
+    })
+
+    const res = saveConfigToLocal({
+      version: '1.2.2',
+      settings: { title: 'EasyNavi', background: 'white', searchEngine: 'google', openInNewTab: true, showSearch: true },
+      categories: []
+    })
+
+    expect(res.ok).toBe(false)
+    setItemSpy.mockRestore()
   })
 })

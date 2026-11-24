@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { FolderPlus, HelpCircle, CheckCircle2, Settings, Check } from 'lucide-vue-next'
-import type { NavConfig, NavCategory, NavItem } from './types/nav'
-import { getFaviconUrl, isDirectUrl, toDirectUrl } from './utils/urlHelper'
+import type { NavConfig, NavCategory, NavItem, BookmarkSuggestion } from './types/nav'
+import { isDirectUrl, toDirectUrl } from './utils/urlHelper'
 import { buildSearchUrl } from './utils/searchEngines'
 import { filterAndRankCategories } from './services/bookmarkSuggestions'
+import { resolveItemDisplayIcon } from './services/iconCache'
 import { useNavStore } from './composables/useNavStore'
 
 import Header from './components/Header.vue'
@@ -78,10 +79,7 @@ const editingItem = ref<NavItem | null>(null)
 const editingCategory = ref<NavCategory | null>(null)
 const isCreatingCategory = ref(false)
 
-const getFloatingIcon = (item: NavItem) => {
-  if (item.icon && item.icon.trim()) return item.icon.trim()
-  return getFaviconUrl(item.url, item.title)
-}
+const getFloatingIcon = (item: NavItem) => resolveItemDisplayIcon(item)
 
 // 浮动卡片坐标计算：卡片标准尺寸 116px * 94px，图标几何正中心水平 58px，垂直 35.5px
 const floatingCardStyle = computed(() => {
@@ -300,6 +298,17 @@ const handleSelectFocusedCard = () => {
   }
 }
 
+const handleSelectSuggestion = (suggestion: BookmarkSuggestion) => {
+  for (const cat of config.value.categories) {
+    const matched = cat.items.find(i => i.id === suggestion.id) || cat.items.find(i => i.url === suggestion.url)
+    if (matched) {
+      recordItemClick(matched)
+      break
+    }
+  }
+  handleOpenDirectUrl(suggestion.url)
+}
+
 const handleClearFocus = () => {
   activeKeyboardIndex.value = -1
 }
@@ -403,6 +412,7 @@ const handleCopyUrl = (item: NavItem) => {
 }
 
 const handleOpenInNewTab = (item: NavItem) => {
+  recordItemClick(item)
   window.open(item.url, '_blank', 'noopener,noreferrer')
 }
 
@@ -513,6 +523,7 @@ const handleResetDefault = async () => {
         :focused-card-title="activeFocusedCard?.title"
         @submit-search="handleSearchSubmit"
         @open-direct-url="handleOpenDirectUrl"
+        @select-suggestion="handleSelectSuggestion"
         @navigate-cards="handleNavigateCards"
         @select-focused-card="handleSelectFocusedCard"
         @clear-focus="handleClearFocus"

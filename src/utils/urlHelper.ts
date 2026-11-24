@@ -35,27 +35,32 @@ const KNOWN_DOMAINS: Record<string, string> = {
  * 判断是否为私有局域网/内网地址
  */
 export function isPrivateNetwork(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase()
   return (
-    hostname === 'localhost' ||
-    hostname.endsWith('.local') ||
-    hostname.endsWith('.lan') ||
-    /^127\./.test(hostname) ||
-    /^192\.168\./.test(hostname) ||
-    /^10\./.test(hostname) ||
-    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
+    host === 'localhost' ||
+    host.endsWith('.local') ||
+    host.endsWith('.lan') ||
+    /^127\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^10\./.test(host) ||
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)
   )
 }
 
 /**
- * 补全 URL 协议并规范化
+ * 补全 URL 协议并规范化（localhost、IPv4 及私有内网地址缺省使用 http://，其余使用 https://）
  */
 export function normalizeUrl(input: string): string {
-  let url = input.trim()
+  const url = input.trim()
   if (!url) return ''
-  if (!/^https?:\/\//i.test(url)) {
-    url = 'https://' + url
+  if (/^https?:\/\//i.test(url)) {
+    return url
   }
-  return url
+
+  const hostCandidate = url.split(/[/?#]/)[0].split(':')[0].toLowerCase()
+  const isIpv4 = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(hostCandidate)
+  const protocol = (isIpv4 || isPrivateNetwork(hostCandidate)) ? 'http://' : 'https://'
+  return protocol + url
 }
 
 /**
@@ -99,15 +104,7 @@ export function isDirectUrl(input: string): boolean {
  * 将直接网址补全为可安全跳转的标准 URL
  */
 export function toDirectUrl(input: string): string {
-  const text = input.trim()
-  if (/^https?:\/\//i.test(text)) return text
-
-  // 本地 IP 或 localhost 默认使用 http:// 协议
-  if (/^localhost(?::\d+)?/i.test(text) || /^(?:\d{1,3}\.){3}\d{1,3}/.test(text)) {
-    return 'http://' + text
-  }
-
-  return 'https://' + text
+  return normalizeUrl(input)
 }
 
 /**
